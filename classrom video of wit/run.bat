@@ -1,11 +1,13 @@
 @echo off
 cd /d "%~dp0"
 echo ================================================
-echo  SmartClass AI — Real Classroom Analyzer
+echo  SmartClass AI — Auto Setup and Run
 echo ================================================
 echo.
-echo  Running: analyze.py
-echo  Video:   videos\real_classroom.mp4
+echo  This will:
+echo    1. Check Python dependencies
+echo    2. Download the classroom video (~957 MB) if needed
+echo    3. Launch the analyzer
 echo.
-python analyze.py
+python setup.py
 pause
