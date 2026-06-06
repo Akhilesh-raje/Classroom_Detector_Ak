@@ -1,0 +1,180 @@
+[
+  {
+    "student_name": "Seat 1",
+    "roll_no": null,
+    "grid_label": "1",
+    "session_id": "99673b88-e1bf-4762-b6ed-efe8c5ee19a8",
+    "session_date": "2026-05-27",
+    "session_duration_seconds": 95.505,
+    "avg_attention": 87.1,
+    "peak_attention": 95.3,
+    "low_attention": 75.1,
+    "attendance_status": "present",
+    "activity_timeline": [
+      {
+        "activity": "neutral",
+        "start_ts": 46.42139267921448,
+        "end_ts": 47.95913243293762,
+        "duration": 1.5377397537231445
+      },
+      {
+        "activity": "studying",
+        "start_ts": 47.95913243293762,
+        "end_ts": 95.50545144081116,
+        "duration": 47.546319007873535
+      }
+    ],
+    "electronics": {
+      "phone_duration_seconds": 0.0,
+      "laptop_duration_seconds": 0.0,
+      "earphone_duration_seconds": 0.0
+    },
+    "_student_id": null
+  },
+  {
+    "student_name": "Seat 2",
+    "roll_no": null,
+    "grid_label": "2",
+    "session_id": "99673b88-e1bf-4762-b6ed-efe8c5ee19a8",
+    "session_date": "2026-05-27",
+    "session_duration_seconds": 95.505,
+    "avg_attention": 80.4,
+    "peak_attention": 98.3,
+    "low_attention": 73.2,
+    "attendance_status": "present",
+    "activity_timeline": [
+      {
+        "activity": "neutral",
+        "start_ts": 57.05938100814819,
+        "end_ts": 58.97557187080383,
+        "duration": 1.9161908626556396
+      },
+      {
+        "activity": "studying",
+        "start_ts": 58.97557187080383,
+        "end_ts": 63.975085973739624,
+        "duration": 4.999514102935791
+      },
+      {
+        "activity": "distracted",
+        "start_ts": 63.975085973739624,
+        "end_ts": 95.50545144081116,
+        "duration": 31.530365467071533
+      }
+    ],
+    "electronics": {
+      "phone_duration_seconds": 0.0,
+      "laptop_duration_seconds": 0.0,
+      "earphone_duration_seconds": 0.0
+    },
+    "_student_id": null
+  },
+  {
+    "student_name": "Seat 3",
+    "roll_no": null,
+    "grid_label": "3",
+    "session_id": "99673b88-e1bf-4762-b6ed-efe8c5ee19a8",
+    "session_date": "2026-05-27",
+    "session_duration_seconds": 95.505,
+    "avg_attention": 84.0,
+    "peak_attention": 95.6,
+    "low_attention": 78.1,
+    "attendance_status": "present",
+    "activity_timeline": [
+      {
+        "activity": "neutral",
+        "start_ts": 57.05938100814819,
+        "end_ts": 62.10182285308838,
+        "duration": 5.0424418449401855
+      },
+      {
+        "activity": "studying",
+        "start_ts": 62.10182285308838,
+        "end_ts": 95.50545144081116,
+        "duration": 33.40362858772278
+      }
+    ],
+    "electronics": {
+      "phone_duration_seconds": 0.0,
+      "laptop_duration_seconds": 0.0,
+      "earphone_duration_seconds": 0.0
+    },
+    "_student_id": null
+  },
+  {
+    "student_name": "Seat 4",
+    "roll_no": null,
+    "grid_label": "4",
+    "session_id": "99673b88-e1bf-4762-b6ed-efe8c5ee19a8",
+    "session_date": "2026-05-27",
+    "session_duration_seconds": 95.505,
+    "avg_attention": 84.2,
+    "peak_attention": 95.2,
+    "low_attention": 73.4,
+    "attendance_status": "present",
+    "activity_timeline": [
+      {
+        "activity": "neutral",
+        "start_ts": 57.05938100814819,
+        "end_ts": 58.97557187080383,
+        "duration": 1.9161908626556396
+      },
+      {
+        "activity": "studying",
+        "start_ts": 58.97557187080383,
+        "end_ts": 65.15302848815918,
+        "duration": 6.177456617355347
+      },
+      {
+        "activity": "distracted",
+        "start_ts": 65.15302848815918,
+        "end_ts": 69.57817769050598,
+        "duration": 4.425149202346802
+      },
+      {
+        "activity": "studying",
+        "start_ts": 69.57817769050598,
+        "end_ts": 95.50545144081116,
+        "duration": 25.927273750305176
+      }
+    ],
+    "electronics": {
+      "phone_duration_seconds": 0.0,
+      "laptop_duration_seconds": 0.0,
+      "earphone_duration_seconds": 0.0
+    },
+    "_student_id": null
+  },
+  {
+    "student_name": "Seat 5",
+    "roll_no": null,
+    "grid_label": "5",
+    "session_id": "99673b88-e1bf-4762-b6ed-efe8c5ee19a8",
+    "session_date": "2026-05-27",
+    "session_duration_seconds": 95.505,
+    "avg_attention": 84.8,
+    "peak_attention": 96.0,
+    "low_attention": 79.1,
+    "attendance_status": "present",
+    "activity_timeline": [
+      {
+        "activity": "neutral",
+        "start_ts": 62.10182285308838,
+        "end_ts": 66.40240025520325,
+        "duration": 4.300577402114868
+      },
+      {
+        "activity": "studying",
+        "start_ts": 66.40240025520325,
+        "end_ts": 95.50545144081116,
+        "duration": 29.10305118560791
+      }
+    ],
+    "electronics": {
+      "phone_duration_seconds": 0.0,
+      "laptop_duration_seconds": 0.0,
+      "earphone_duration_seconds": 0.0
+    },
+    "_student_id": null
+  }
+]

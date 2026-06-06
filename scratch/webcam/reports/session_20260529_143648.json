@@ -1,0 +1,118 @@
+[
+  {
+    "student_name": "Seat 1",
+    "roll_no": null,
+    "grid_label": "1",
+    "session_id": "d72dbe3a-a6c3-42c9-852c-32c1b073a122",
+    "session_date": "2026-05-29",
+    "session_duration_seconds": 265.664,
+    "avg_attention": 93.1,
+    "peak_attention": 95.8,
+    "low_attention": 89.5,
+    "attention_methodology": "Observable engagement proxy. Weights: head_pose=65%, motion_stability=27%, eye_openness=8%. Not a measure of cognitive comprehension.",
+    "confidence": 0.23,
+    "frames_analyzed": 7,
+    "sample_confidence": 0.08,
+    "sample_confidence_note": "Low confidence \u2014 fewer than 90 frames analyzed",
+    "attendance_status": "present",
+    "activity_timeline": [
+      {
+        "activity": "neutral",
+        "start_ts": 210.437997341156,
+        "end_ts": 265.6642506122589,
+        "duration": 55.226253271102905
+      }
+    ],
+    "electronics": {
+      "phone_duration_seconds": 0.0,
+      "laptop_duration_seconds": 0.0,
+      "earphone_duration_seconds": 0.0
+    },
+    "_student_id": null,
+    "reconciled_activity": "neutral",
+    "activity_note": "",
+    "attention_breakdown": {
+      "attention_score": 89.52427596415377,
+      "avg_attention": 93.1,
+      "peak_attention": 95.8,
+      "low_attention": 89.5,
+      "confidence": 0.23,
+      "factors": {
+        "head_pose": 1.0,
+        "face_visibility": 1.0,
+        "motion_stability": 0.332,
+        "eye_openness": 1.0
+      },
+      "activity": "neutral",
+      "activity_note": "",
+      "note": "Observable engagement proxy based on head pose, eye openness, and motion stability \u2014 not a measure of cognitive comprehension."
+    }
+  },
+  {
+    "student_name": "Seat 2",
+    "roll_no": null,
+    "grid_label": "2",
+    "session_id": "d72dbe3a-a6c3-42c9-852c-32c1b073a122",
+    "session_date": "2026-05-29",
+    "session_duration_seconds": 265.664,
+    "avg_attention": 84.7,
+    "peak_attention": 93.3,
+    "low_attention": 71.9,
+    "attention_methodology": "Observable engagement proxy. Weights: head_pose=65%, motion_stability=27%, eye_openness=8%. Not a measure of cognitive comprehension.",
+    "confidence": 1.0,
+    "frames_analyzed": 52,
+    "sample_confidence": 0.58,
+    "sample_confidence_note": "Low confidence \u2014 fewer than 90 frames analyzed",
+    "attendance_status": "present",
+    "activity_timeline": [
+      {
+        "activity": "neutral",
+        "start_ts": 210.437997341156,
+        "end_ts": 212.5862648487091,
+        "duration": 2.1482675075531006
+      },
+      {
+        "activity": "studying",
+        "start_ts": 212.5862648487091,
+        "end_ts": 263.7780647277832,
+        "duration": 51.1917998790741
+      },
+      {
+        "activity": "drowsy",
+        "start_ts": 263.7780647277832,
+        "end_ts": 265.65274715423584,
+        "duration": 1.8746824264526367
+      },
+      {
+        "activity": "attentive",
+        "start_ts": 265.65274715423584,
+        "end_ts": 265.6642506122589,
+        "duration": 0.011503458023071289
+      }
+    ],
+    "electronics": {
+      "phone_duration_seconds": 0.0,
+      "laptop_duration_seconds": 0.0,
+      "earphone_duration_seconds": 0.0
+    },
+    "_student_id": null,
+    "reconciled_activity": "attentive",
+    "activity_note": "",
+    "attention_breakdown": {
+      "attention_score": 76.9970325384295,
+      "avg_attention": 84.7,
+      "peak_attention": 93.3,
+      "low_attention": 71.9,
+      "confidence": 1.0,
+      "factors": {
+        "head_pose": 1.0,
+        "face_visibility": 0.998,
+        "motion_stability": 0.442,
+        "eye_openness": 1.0
+      },
+      "activity": "attentive",
+      "activity_note": "",
+      "note": "Observable engagement proxy based on head pose, eye openness, and motion stability \u2014 not a measure of cognitive comprehension."
+    }
+  }
+]

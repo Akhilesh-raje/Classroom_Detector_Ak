@@ -1,0 +1,61 @@
+# ── Node ──────────────────────────────────────────────────────────────────────
+node_modules/
+dist/
+dist-ssr/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# ── AI model weights (too large for GitHub) ──────────────────────────────────
+models/*.pt
+models/*.onnx
+models/*.tflite
+models/*.engine
+# Keep the small mediapipe task file (3.6 MB, under GitHub limit)
+!models/face_landmarker.task
+
+# ── Videos (way too large) ───────────────────────────────────────────────────
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+# Keep the test video folder structure but not the actual files
+test video/
+classrom video of wit/videos/
+
+# ── Generated outputs ─────────────────────────────────────────────────────────
+outputs/
+real_classroom_results.txt
+scratch/video_runs/*.jpg
+
+# ── Database ──────────────────────────────────────────────────────────────────
+backend/smartclass.db
+*.db
+*.sqlite
+
+# ── Editor & OS ───────────────────────────────────────────────────────────────
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ── Kiro (IDE internal) ───────────────────────────────────────────────────────
+.kiro/
