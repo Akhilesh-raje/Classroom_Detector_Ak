@@ -188,7 +188,14 @@ def run():
             live_fps = 1.0 / max(0.001, sum(fps_buf) / len(fps_buf))
             elapsed = time.time() - t0
             
-            draw_global_hud(frame, faces, 0, elapsed, live_fps, grid_label, cam_idx=cam_idx)
+            draw_global_hud(frame, faces, {
+                "mode": "LIVE",
+                "cam_idx": cam_idx,
+                "fps": live_fps,
+                "elapsed": elapsed,
+                "grid_label": grid_label,
+                "hint": "N=next | G=remap grid | Q=quit",
+            })
             
             cv2.imshow(WIN, frame)
             key = cv2.waitKey(1) & 0xFF

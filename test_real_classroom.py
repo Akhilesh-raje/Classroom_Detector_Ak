@@ -621,7 +621,11 @@ def run(video_path: str, structure_ai: bool = False, headless: bool = False, max
     print(f"  Benchmark CSV   : {csv_path}")
 
     try:
-        from benchmark_v2_2 import compute_v2_2_metrics, print_v2_2_report
+        try:
+            from benchmark_v2_2 import compute_v2_2_metrics, print_v2_2_report
+        except ImportError:
+            sys.path.insert(0, os.path.join(HERE, "benchmarks"))
+            from benchmark_v2_2 import compute_v2_2_metrics, print_v2_2_report
         v2_2_metrics = compute_v2_2_metrics(csv_path)
         print_v2_2_report(v2_2_metrics)
     except Exception as e:

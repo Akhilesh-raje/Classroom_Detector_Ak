@@ -6,8 +6,8 @@ import os
 import sys
 import cv2
 
-# Add backend directory to path if needed to find core package
-sys.path.append(os.path.dirname(__file__))
+# Add backend directory to path to find core package
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
 from core.engine import ClassroomEngine, log
 

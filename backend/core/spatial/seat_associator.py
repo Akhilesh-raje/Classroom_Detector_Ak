@@ -157,6 +157,7 @@ class RowClassifier:
                 return candidate_row
             else:
                 return curr_confirmed
+        return curr_confirmed
 
     def get_confirmed_row(self, tid: int) -> Optional[int]:
         return self._confirmed_row.get(tid)

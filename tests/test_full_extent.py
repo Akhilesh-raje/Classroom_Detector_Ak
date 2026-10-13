@@ -30,6 +30,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKEND = os.path.join(ROOT, "backend")
 sys.path.insert(0, ROOT)
 sys.path.insert(0, BACKEND)
+sys.path.insert(0, os.path.join(ROOT, "benchmarks"))
 
 video_path = os.path.join(ROOT, "classrom video of wit", "videos", "real_classroom.mp4")
 if not os.path.exists(video_path):
