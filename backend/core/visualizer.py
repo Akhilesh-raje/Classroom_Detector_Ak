@@ -479,6 +479,14 @@ def render_classroom_frame(frame, faces, engine, mode="spatial", frame_idx=0, fp
 
     return vis
 
+
+# Aliases
+draw_hud = draw_global_hud
+draw_student_box = draw_student_overlay
+draw_seating_chart = draw_grid_overlay
+COLOR_MAP = C
+_compute_row_col = lambda idx, cols=6: (idx // cols, idx % cols)
+
 import importlib
 _mod = importlib.import_module("core.visualization.visualizer")
 for _k, _v in _mod.__dict__.items():

@@ -355,3 +355,13 @@ def render_layout(frame, layout: ClassroomLayout) -> "np.ndarray":
     cv2.putText(vis, hud, (4,15),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.42, (255,255,255), 1, cv2.LINE_AA)
     return vis
+
+
+class SpatialEngine:
+    """Classroom Spatial Engine Facade providing layout and geometry synthesis."""
+    build_layout = staticmethod(build_layout_from_persons)
+    calibrate = staticmethod(calibrate_from_video_frames)
+    to_seat_scaffold = staticmethod(layout_to_seat_scaffold)
+    to_dict = staticmethod(layout_to_dict)
+    render = staticmethod(render_layout)
+

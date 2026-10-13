@@ -3,14 +3,20 @@ SmartClass AI — YOLO Face Analysis Engine (with InsightFace recognition)
 """
 import numpy as np
 import cv2
-from core.engine import ClassroomEngine
-from core.face_recognition_engine import face_rec_engine
+from core.recognition.face_recognition_engine import face_rec_engine
 
 class FaceEngine:
     def __init__(self):
-        self.engine = ClassroomEngine(max_seats=6)
+        self._engine = None
         self.registered_encodings = []
         print("FaceEngine initialized with InsightFace recognition.")
+
+    @property
+    def engine(self):
+        if self._engine is None:
+            from core.engine import ClassroomEngine
+            self._engine = ClassroomEngine(max_seats=6)
+        return self._engine
 
     def process_frame(self, frame_bgr):
         h, w = frame_bgr.shape[:2]

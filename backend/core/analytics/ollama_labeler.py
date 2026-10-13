@@ -174,3 +174,4 @@ class OllamaLabeler:
 
 # Singleton
 ollama_labeler = OllamaLabeler()
+OllamaClassroomLabeler = OllamaLabeler
