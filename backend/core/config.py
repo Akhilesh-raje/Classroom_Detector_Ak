@@ -9,7 +9,7 @@ YOLO_CONF       = 0.18
 PERSIST         = True
 
 # ── Dynamic Seat Stabilizer Parameters ────────────────────────────────────────
-MAX_SEATS       = 6
+MAX_SEATS       = 20
 SEAT_PROXIMITY_THRES = 0.25  # Percentage of frame diagonal
 
 SMALL_BBOX_FRAC      = 0.02   # Threshold for small-detection fallback (fraction of frame area)

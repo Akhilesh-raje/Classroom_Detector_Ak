@@ -425,35 +425,67 @@ def cluster_into_rows(detections, frame_h, gap_frac=None):
 
 # ── Seat Naming ───────────────────────────────────────────────────────────────
 
-def generate_seat_names(rows, ollama_available=False):
+# Seats-per-bench config: teacher sets this once before scanning.
+# 1 = individual desks (R1C1 style), 2 or 3 = shared bench (R1B2-L style)
+SEATS_PER_BENCH = 2   # default; overridden by run() at startup
+
+
+def generate_seat_names(rows, seats_per_bench=SEATS_PER_BENCH, ollama_available=False):
     """
     Generate seat names for all detected seats.
-    Format: R{row}S{seat} e.g. R1S1, R1S2, R2S1
-    If Ollama available, use LLM for smarter naming.
+    Format matches backend seat_naming.py:
+      bench layout (seats_per_bench >= 2): R1B2-L, R1B2-R, R1B2-M …
+      desk layout  (seats_per_bench == 1): R1C1, R1C2 …
     Returns dict: seat_key → display_name
     """
+    import sys as _sys
+    _sys.path.insert(0, backend_path)
+    try:
+        from core.seat_naming import seat_label as _lbl, _POSITIONS
+        positions = _POSITIONS.get(seats_per_bench, ["C"])
+        layout_type = "bench" if seats_per_bench > 1 else "desk"
+    except Exception:
+        # fallback if backend not on path
+        positions   = ["L", "R"] if seats_per_bench == 2 else (["L","M","R"] if seats_per_bench == 3 else ["C"])
+        layout_type = "bench" if seats_per_bench > 1 else "desk"
+        def _lbl(r, b, p, lt):
+            return f"R{r}B{b}-{p}" if lt == "bench" else f"R{r}C{b}"
+
     names = {}
     grid_labels = []
 
     for r_idx, row in enumerate(rows):
         for s_idx, det in enumerate(row):
-            key   = f"det_{r_idx}_{s_idx}"
-            label = f"R{r_idx + 1}S{s_idx + 1}"
-            names[key]  = label
-            det["seat_label"] = label
-            det["row"]        = r_idx + 1
-            det["col"]        = s_idx + 1
+            bench_num = s_idx + 1
+            row_num   = r_idx + 1
+
+            # Expand one detected bench bbox into sub-seat labels
+            bench_labels = []
+            if layout_type == "bench":
+                for pos in positions:
+                    bench_labels.append(_lbl(row_num, bench_num, pos, "bench"))
+            else:
+                bench_labels.append(_lbl(row_num, bench_num, None, "desk"))
+
+            # Store first sub-seat label as the primary label for this detection box
+            primary = bench_labels[0]
+            key = f"det_{r_idx}_{s_idx}"
+            names[key]        = primary
+            det["seat_label"] = primary
+            det["bench_labels"] = bench_labels   # all sub-seats for this bench
+            det["row"]        = row_num
+            det["col"]        = bench_num
             det["seat_key"]   = key
-            grid_labels.append(label)
+            det["layout_type"] = layout_type
+            grid_labels.extend(bench_labels)
 
     if ollama_available:
         try:
             from core.ollama_labeler import ollama_labeler
             mapping = ollama_labeler.label_seats(grid_labels)
-            # Update names with Ollama suggestions
-            for key, label in zip(names.keys(), grid_labels):
-                if label in mapping:
-                    names[key] = mapping[label]
+            for key in names:
+                if names[key] in mapping:
+                    names[key] = mapping[names[key]]
             print(f"[OLLAMA] Seat names: {list(names.values())[:6]}...")
         except Exception as e:
             print(f"[OLLAMA] Labeling failed: {e} — using default names")
@@ -584,34 +616,39 @@ def build_grid_image(frame, rows, frame_w, frame_h):
 
 # ── Layout JSON ───────────────────────────────────────────────────────────────
 
-def build_layout_json(rows, frame_w, frame_h, cam_idx, timestamp):
-    """Build the full layout JSON structure."""
+def build_layout_json(rows, frame_w, frame_h, cam_idx, timestamp, seats_per_bench=2):
+    """Build the full layout JSON structure compatible with backend seat_naming."""
+    layout_type = "bench" if seats_per_bench > 1 else "desk"
     seats = []
     for r_idx, row in enumerate(rows):
         for s_idx, det in enumerate(row):
-            seats.append({
-                "seat_label":  det.get("seat_label", f"R{r_idx+1}S{s_idx+1}"),
-                "row":         r_idx + 1,
-                "col":         s_idx + 1,
-                "bbox":        det["bbox"],
-                "center":      det["center"],
-                "cls_name":    det["cls_name"],
-                "confidence":  det["confidence"],
-                "area_px":     det["area"],
-                "student_name": None,   # to be filled when students are registered
-                "student_id":   None,
-            })
+            primary = det.get("seat_label", f"R{r_idx+1}B{s_idx+1}-L")
+            for sub_label in det.get("bench_labels", [primary]):
+                seats.append({
+                    "seat_label":   sub_label,
+                    "row":          r_idx + 1,
+                    "col":          s_idx + 1,
+                    "bbox":         det["bbox"],
+                    "center":       det["center"],
+                    "cls_name":     det["cls_name"],
+                    "confidence":   det["confidence"],
+                    "area_px":      det["area"],
+                    "student_name": None,
+                    "student_id":   None,
+                })
 
     return {
-        "version":    "2.0",
-        "timestamp":  timestamp,
-        "camera_idx": cam_idx,
-        "frame_size": [frame_w, frame_h],
-        "total_seats": len(seats),
-        "total_rows":  len(rows),
-        "max_cols":    max((len(r) for r in rows), default=0),
-        "seats":       seats,
-        "grid_cells":  [s["seat_label"] for s in seats],
+        "version":         "3.0",
+        "timestamp":       timestamp,
+        "camera_idx":      cam_idx,
+        "frame_size":      [frame_w, frame_h],
+        "layout_type":     layout_type,
+        "seats_per_bench": seats_per_bench,
+        "total_seats":     len(seats),
+        "total_rows":      len(rows),
+        "max_cols":        max((len(r) for r in rows), default=0),
+        "seats":           seats,
+        "grid_cells":      [s["seat_label"] for s in seats],
         "note": (
             "Seat positions detected from empty classroom scan. "
             "Assign students via /api/students/{id}/assign-seat endpoint "
@@ -653,6 +690,18 @@ def run():
     except Exception:
         print("[OLLAMA] Not available — using default naming")
 
+    # ── Ask teacher for classroom layout ─────────────────────────────────────
+    print("\nClassroom layout setup:")
+    print("  1 = Individual desks     (names like R1C1, R1C2)")
+    print("  2 = Shared bench 2-seat  (names like R1B1-L, R1B1-R)  [default]")
+    print("  3 = Shared bench 3-seat  (names like R1B1-L, R1B1-M, R1B1-R)")
+    _choice = input("Enter 1/2/3 [2]: ").strip() or "2"
+    try:
+        seats_per_bench = int(_choice)
+        if seats_per_bench not in (1, 2, 3):
+            seats_per_bench = 2
+    except ValueError:
+        seats_per_bench = 2
     # ── Open camera ───────────────────────────────────────────────────────────
     available = scan_cameras()
     if not available:
@@ -744,7 +793,7 @@ def run():
 
             detections = deduplicate_detections(all_dets, iou_thresh=0.4)
             rows       = cluster_into_rows(detections, H)
-            generate_seat_names(rows, ollama_available=ollama_ok)
+            generate_seat_names(rows, seats_per_bench=seats_per_bench, ollama_available=ollama_ok)
 
             elapsed    = time.time() - t0
             status_msg = f"Found {len(detections)} seats in {len(rows)} rows ({elapsed:.1f}s) — Press S to save"
@@ -760,7 +809,7 @@ def run():
                 status_msg = "Nothing to save — scan first (SPACE)"
             else:
                 ts     = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                layout = build_layout_json(rows, W, H, cam_idx, ts)
+                layout = build_layout_json(rows, W, H, cam_idx, ts, seats_per_bench)
                 with open(LAYOUT_JSON, "w", encoding="utf-8") as f:
                     json.dump(layout, f, indent=2)
 
@@ -866,7 +915,7 @@ def run():
             if detections and not saved:
                 print("[INFO] Auto-saving before quit...")
                 ts     = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                layout = build_layout_json(rows, W, H, cam_idx, ts)
+                layout = build_layout_json(rows, W, H, cam_idx, ts, seats_per_bench)
                 with open(LAYOUT_JSON, "w", encoding="utf-8") as f:
                     json.dump(layout, f, indent=2)
                 if last_frame is not None:

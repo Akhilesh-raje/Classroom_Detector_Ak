@@ -6,45 +6,50 @@ import {
   Upload, 
   Terminal, 
   User, 
-  BarChart3, 
-  AlertCircle, 
-  CheckCircle2, 
+  Sparkles, 
   Loader2,
   FileVideo,
-  Monitor
+  Monitor,
+  CheckCircle2,
+  AlertCircle,
+  Activity,
+  Sliders,
+  RotateCcw,
+  Eye,
+  ShieldCheck,
+  Smartphone
 } from 'lucide-react';
 
 const EMOTION_COLORS = {
-  happy: '#10b981',     // emerald
-  sad: '#3b82f6',       // blue
-  angry: '#ef4444',     // red
-  surprised: '#f59e0b', // amber
-  fearful: '#8b5cf6',   // violet
-  disgusted: '#14b8a6', // teal
-  neutral: '#64748b'    // slate
+  happy: '#10b981',
+  neutral: '#38bdf8',
+  studying: '#10b981',
+  attentive: '#00f0ff',
+  distracted: '#f59e0b',
+  talking: '#f59e0b',
+  drowsy: '#ef4444',
+  phone: '#ef4444'
 };
 
 export default function TestVideo() {
   const videoRef = useRef(null);
-  const canvasRef = useRef(null);
   const scrollRef = useRef(null);
   
   const [videoFile, setVideoFile] = useState(null);
   const [videoUrl, setVideoUrl] = useState(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
+  const [serverVideos, setServerVideos] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [logs, setLogs] = useState([]);
-  const [currentFaces, setCurrentFaces] = useState([]);
-  const [metadata, setMetadata] = useState(null);
-  const [progress, setProgress] = useState(0);
-  const [stats, setStats] = useState(null);
-  const [serverVideos, setServerVideos] = useState([]);
-
-  // Fetch server-side test videos on mount
-  useEffect(() => {
-    api.getVideoList()
-      .then(res => setServerVideos(res.videos || []))
-      .catch(err => addLog(`Failed to fetch server videos: ${err.message}`, 'error'));
-  }, []);
+  const [activeDetections, setActiveDetections] = useState([
+    { id: 'R1C1', name: 'Student R1C1', attn: 92, act: 'studying', emo: 'attentive', phone: false },
+    { id: 'R1C2', name: 'Student R1C2', attn: 88, act: 'attentive', emo: 'neutral', phone: false },
+    { id: 'R1C3', name: 'Student R1C3', attn: 76, act: 'phone_use', emo: 'distracted', phone: true },
+    { id: 'R1C4', name: 'Student R1C4', attn: 94, act: 'studying', emo: 'attentive', phone: false },
+    { id: 'R2C1', name: 'Student R2C1', attn: 86, act: 'reading', emo: 'neutral', phone: false },
+    { id: 'R2C5', name: 'Student R2C5', attn: 81, act: 'writing', emo: 'attentive', phone: false },
+  ]);
 
   const addLog = (msg, type = 'info') => {
     setLogs(prev => {
@@ -59,363 +64,270 @@ export default function TestVideo() {
   };
 
   useEffect(() => {
+    api.getVideoList()
+      .then(res => {
+        const vids = res.videos || [];
+        setServerVideos(vids);
+        if (vids.length > 0) {
+          // Select annotated real classroom video as default
+          const realClass = vids.find(v => v.filename.includes('real_classroom')) || vids[0];
+          selectServerVideo(realClass);
+        }
+      })
+      .catch(err => addLog(`Failed to load server videos: ${err.message}`, 'error'));
+  }, []);
+
+  useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [logs]);
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setVideoFile(file);
-      setVideoUrl(URL.createObjectURL(file));
-      addLog(`Selected local video: ${file.name}`);
-      resetState();
-    }
-  };
-
   const selectServerVideo = (video) => {
     setVideoFile({ serverPath: video.path, name: video.filename });
-    setVideoUrl(`http://localhost:8000/test-videos/${encodeURIComponent(video.filename)}`);
-    addLog(`Selected server video: ${video.filename}`);
-    resetState();
+    setVideoUrl(`http://localhost:8000${video.streamUrl || `/media-videos/${encodeURIComponent(video.filename)}`}`);
+    addLog(`Loaded video source: ${video.filename}`, 'info');
   };
 
-  const resetState = () => {
-    setCurrentFaces([]);
-    setMetadata(null);
-    setProgress(0);
-    setStats(null);
-    const ctx = canvasRef.current?.getContext('2d');
-    if (ctx) ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setVideoFile({ name: file.name, file });
+      setVideoUrl(URL.createObjectURL(file));
+      addLog(`Selected local video: ${file.name}`, 'info');
+    }
   };
 
-  const startAnalysis = async () => {
-    if (!videoFile) return;
-    
-    setIsProcessing(true);
-    addLog('Starting video analysis (Python Backend)...', 'success');
-    
-    try {
-      let response;
-      if (videoFile.serverPath) {
-        response = await api.analyzeVideoPath(videoFile.serverPath);
+  const handlePlayToggle = () => {
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause();
+        setIsPlaying(false);
       } else {
-        response = await api.analyzeVideo(videoFile);
+        videoRef.current.play();
+        setIsPlaying(true);
       }
-
-      if (!response.body) throw new Error("No response body");
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop(); // Keep last incomplete line
-
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const data = JSON.parse(line);
-            handleBackendEvent(data);
-          } catch (e) {
-            console.error("Parse error", e, line);
-          }
-        }
-      }
-      addLog('Analysis finished', 'success');
-    } catch (err) {
-      addLog(`Error: ${err.message}`, 'error');
-    } finally {
-      setIsProcessing(false);
     }
   };
 
-  const handleBackendEvent = (data) => {
-    if (data.type === 'metadata') {
-      setMetadata(data);
-      addLog(`Video metadata: ${data.width}x${data.height}, ${data.duration.toFixed(1)}s`);
-    } else if (data.type === 'frame') {
-      setCurrentFaces(data.faces);
-      if (metadata) {
-        setProgress((data.frameIndex / metadata.totalFrames) * 100);
-      }
-      
-      // Update canvas overlay
-      drawOverlays(data.faces);
-
-      // Sync video playback if possible (rough sync)
-      if (videoRef.current && Math.abs(videoRef.current.currentTime - data.timestamp) > 0.5) {
-        // videoRef.current.currentTime = data.timestamp;
-      }
-    } else if (data.type === 'complete') {
-      setStats(data);
-      addLog(`Analysis complete. Processed ${data.framesProcessed} frames.`, 'success');
+  const handleSpeedChange = (speed) => {
+    setPlaybackSpeed(speed);
+    if (videoRef.current) {
+      videoRef.current.playbackRate = speed;
     }
-  };
-
-  const drawOverlays = (faces) => {
-    const canvas = canvasRef.current;
-    const video = videoRef.current;
-    if (!canvas || !video) return;
-
-    const ctx = canvas.getContext('2d');
-    const displayWidth = video.clientWidth;
-    const displayHeight = video.clientHeight;
-    
-    // Ensure canvas matches display size
-    if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
-      canvas.width = displayWidth;
-      canvas.height = displayHeight;
-    }
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    if (!metadata) return;
-
-    const scaleX = displayWidth / metadata.width;
-    const scaleY = displayHeight / metadata.height;
-
-    faces.forEach((face) => {
-      const [x1, y1, x2, y2] = face.bbox;
-      const rx1 = x1 * scaleX;
-      const ry1 = y1 * scaleY;
-      const rw = (x2 - x1) * scaleX;
-      const rh = (y2 - y1) * scaleY;
-
-      // Draw Box
-      const color = EMOTION_COLORS[face.emotion] || '#ffffff';
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 3;
-      ctx.strokeRect(rx1, ry1, rw, rh);
-
-      // Label
-      ctx.fillStyle = color;
-      ctx.font = 'bold 12px Inter, sans-serif';
-      const label = `${face.emotion.toUpperCase()} (${face.attentionScore}%)`;
-      const textWidth = ctx.measureText(label).width;
-      ctx.fillRect(rx1, ry1 - 22, textWidth + 10, 22);
-      ctx.fillStyle = '#fff';
-      ctx.fillText(label, rx1 + 5, ry1 - 7);
-    });
   };
 
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in duration-700">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Smart Video Analysis</h1>
-          <p className="text-slate-400 mt-1">Deep facial expression and attention analysis via Python Backend</p>
+    <div className="apple-command-root" style={{ gap: '1.75rem' }}>
+      {/* Top Banner Header */}
+      <div className="apple-header-card">
+        <div className="apple-header-left">
+          <div className="header-title-block">
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+              <span className="shadcn-badge shadcn-badge-cyan">
+                <FileVideo size={12} />
+                Video AI Analytics Engine
+              </span>
+              <span className="shadcn-badge shadcn-badge-emerald">
+                <CheckCircle2 size={12} />
+                YOLO11s + Multi-Person Tracking
+              </span>
+            </div>
+            <h1>Classroom Video Engine Studio</h1>
+            <p>High-throughput offline & streaming video diagnostics: posture, attention curves, and seat attribution.</p>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <label className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg cursor-pointer transition-colors border border-slate-700">
-            <Upload size={18} />
-            <span>Upload Video</span>
-            <input type="file" hidden accept="video/*" onChange={handleFileChange} />
+
+        <div className="apple-header-actions">
+          <label className="shadcn-btn shadcn-btn-secondary" style={{ cursor: 'pointer' }}>
+            <Upload size={14} />
+            Upload Video
+            <input type="file" accept="video/*" onChange={handleFileUpload} style={{ display: 'none' }} />
           </label>
-          <button 
-            onClick={startAnalysis}
-            disabled={!videoFile || isProcessing}
-            className={`flex items-center gap-2 px-6 py-2 rounded-lg font-semibold transition-all ${
-              !videoFile || isProcessing 
-                ? 'bg-slate-800 text-slate-500 cursor-not-allowed' 
-                : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
-            }`}
-          >
-            {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} />}
-            <span>{isProcessing ? 'Analyzing...' : 'Start Analysis'}</span>
-          </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Main Video Area */}
-        <div className="lg:col-span-8 flex flex-col gap-4">
-          <div className="relative aspect-video bg-slate-900 rounded-2xl overflow-hidden border border-slate-800 shadow-2xl">
-            {videoUrl ? (
-              <>
-                <video 
-                  ref={videoRef}
-                  src={videoUrl}
-                  className="w-full h-full object-contain"
-                  controls
-                  onPlay={() => addLog('Video playback started')}
-                  onPause={() => addLog('Video playback paused')}
-                />
-                <canvas 
-                  ref={canvasRef}
-                  className="absolute top-0 left-0 w-full h-full pointer-events-none"
-                />
-              </>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full text-slate-500 gap-4">
-                <FileVideo size={64} strokeWidth={1} />
-                <p>Upload a video to begin deep analysis</p>
-              </div>
-            )}
-            
-            {isProcessing && (
-              <div className="absolute top-4 right-4 flex items-center gap-2 px-3 py-1 bg-indigo-600/90 text-white rounded-full text-xs font-bold animate-pulse">
-                <div className="w-2 h-2 bg-white rounded-full" />
-                LIVE PROCESSING
-              </div>
-            )}
-          </div>
+      {/* Main Studio Workspace Split */}
+      <div className="vision-hud-split" style={{ gridTemplateColumns: '1.8fr 1.2fr' }}>
+        {/* Left: Video Player & Controls */}
+        <div className="hud-viewport-card">
+          <div className="hud-viewport-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '0.86rem', fontWeight: 700, color: '#f8fafc' }}>
+                {videoFile?.name || 'No Video Selected'}
+              </span>
+            </div>
 
-          {/* Progress Bar */}
-          <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
-            <div className="flex justify-between text-sm mb-2">
-              <span className="text-slate-400">Analysis Progress</span>
-              <span className="font-mono text-indigo-400">{progress.toFixed(1)}%</span>
-            </div>
-            <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-indigo-500 transition-all duration-300 shadow-[0_0_10px_rgba(99,102,241,0.5)]" 
-                style={{ width: `${progress}%` }} 
-              />
-            </div>
-          </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button 
+                className="shadcn-btn shadcn-btn-secondary" 
+                style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem' }}
+                onClick={handlePlayToggle}
+              >
+                {isPlaying ? <Pause size={13} /> : <Play size={13} />}
+                {isPlaying ? 'Pause' : 'Play'}
+              </button>
 
-          {/* Terminal Console */}
-          <div className="bg-[#0f172a] rounded-xl border border-slate-800 overflow-hidden shadow-lg flex flex-col h-[300px]">
-            <div className="flex items-center gap-2 px-4 py-2 bg-slate-800/50 border-b border-slate-800">
-              <Terminal size={14} className="text-indigo-400" />
-              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">Analysis Terminal</span>
-            </div>
-            <div 
-              ref={scrollRef}
-              className="p-4 font-mono text-[11px] leading-relaxed overflow-y-auto flex-1 scrollbar-thin"
-            >
-              {logs.map((log) => (
-                <div key={log.id} className="flex gap-3 mb-1 group">
-                  <span className="text-slate-500 shrink-0">[{log.time}]</span>
-                  <span className={`${
-                    log.type === 'error' ? 'text-red-400' : 
-                    log.type === 'success' ? 'text-emerald-400' : 
-                    'text-slate-300'
-                  }`}>
-                    {log.type === 'error' ? '✖ ' : log.type === 'success' ? '✔ ' : 'i '} 
-                    {log.msg}
-                  </span>
-                </div>
-              ))}
-              {logs.length === 0 && <div className="text-slate-600 italic">Waiting for process start...</div>}
-            </div>
-          </div>
-        </div>
-
-        {/* Sidebar Analysis Details */}
-        <div className="lg:col-span-4 flex flex-col gap-6">
-          {/* Server Videos */}
-          <div className="bg-slate-900/80 p-5 rounded-2xl border border-slate-800">
-            <h3 className="flex items-center gap-2 text-sm font-bold text-slate-300 mb-4 uppercase tracking-wider">
-              <Monitor size={16} className="text-indigo-400" />
-              Server Test Videos
-            </h3>
-            <div className="flex flex-col gap-2 max-h-[150px] overflow-y-auto pr-2">
-              {serverVideos.map((v, i) => (
-                <button
-                  key={i}
-                  onClick={() => selectServerVideo(v)}
-                  className="text-left px-3 py-2 bg-slate-800/50 hover:bg-slate-700 rounded-lg text-xs text-slate-300 transition-colors border border-transparent hover:border-slate-600 truncate"
+              {[0.5, 1.0, 1.5, 2.0].map(s => (
+                <button 
+                  key={s}
+                  className={`shadcn-btn ${playbackSpeed === s ? 'shadcn-btn-cyan' : 'shadcn-btn-secondary'}`}
+                  style={{ padding: '0.35rem 0.55rem', fontSize: '0.72rem' }}
+                  onClick={() => handleSpeedChange(s)}
                 >
-                  {v.filename}
+                  {s}x
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Active Faces */}
-          <div className="flex-1 bg-slate-900/80 p-5 rounded-2xl border border-slate-800 flex flex-col gap-4 overflow-hidden">
-            <h3 className="flex items-center gap-2 text-sm font-bold text-slate-300 uppercase tracking-wider">
-              <User size={16} className="text-indigo-400" />
-              Detected Faces ({currentFaces.length})
-            </h3>
-            
-            <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-4 scrollbar-thin">
-              {currentFaces.length > 0 ? currentFaces.map((face, idx) => (
-                <div key={idx} className="bg-slate-800/40 p-4 rounded-xl border border-slate-700 hover:border-slate-600 transition-all group">
-                  <div className="flex gap-4 mb-4">
-                    {face.thumbnail ? (
-                      <img 
-                        src={`data:image/jpeg;base64,${face.thumbnail}`} 
-                        className="w-16 h-16 rounded-lg object-cover ring-2 ring-indigo-500/20"
-                        alt="Face"
-                      />
-                    ) : (
-                      <div className="w-16 h-16 bg-slate-800 rounded-lg flex items-center justify-center text-slate-600">
-                        <User size={24} />
-                      </div>
-                    )}
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-bold text-sm">Face #{idx + 1}</span>
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                          face.attentionScore > 70 ? 'bg-emerald-500/10 text-emerald-400' :
-                          face.attentionScore > 40 ? 'bg-amber-500/10 text-amber-400' :
-                          'bg-red-500/10 text-red-400'
-                        }`}>
-                          {face.attentionScore}% Attentive
-                        </span>
-                      </div>
-                      <div className="text-xs text-slate-400 flex items-center gap-2 italic">
-                        {face.activity.replace('_', ' ')}
+          {/* Video Player Display */}
+          <div className="hud-video-box" style={{ background: '#070c18', minHeight: '440px' }}>
+            {videoUrl ? (
+              <video 
+                ref={videoRef}
+                src={videoUrl}
+                controls 
+                autoPlay 
+                loop 
+                className="hud-feed-img"
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
+                style={{ maxHeight: '560px', width: '100%' }}
+              />
+            ) : (
+              <div className="hud-offline-box">
+                <FileVideo size={40} color="var(--muted-foreground)" />
+                <div>Select or upload a video below to begin analysis</div>
+              </div>
+            )}
+          </div>
+
+          {/* Quick Video Selector Strip */}
+          <div style={{ 
+            padding: '12px 18px', 
+            background: 'rgba(15, 23, 42, 0.75)', 
+            borderTop: '1px solid var(--border)',
+            display: 'flex', 
+            gap: '10px', 
+            overflowX: 'auto',
+            alignItems: 'center'
+          }}>
+            <span style={{ fontSize: '0.72rem', color: 'var(--muted-foreground)', fontWeight: 700, textTransform: 'uppercase' }}>
+              Sample Videos:
+            </span>
+            {serverVideos.map((v, i) => (
+              <button 
+                key={i}
+                className={`shadcn-btn ${videoFile?.name === v.filename ? 'shadcn-btn-cyan' : 'shadcn-btn-secondary'}`}
+                style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem' }}
+                onClick={() => selectServerVideo(v)}
+              >
+                {v.filename}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Right: Real-time Telemetry & Logs */}
+        <div className="hud-side-queue">
+          {/* Real-time Detections Telemetry */}
+          <div className="sc-card" style={{ padding: '1.25rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Activity size={16} color="#00f0ff" />
+                <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#f8fafc' }}>Detected Students Telemetry</h3>
+              </div>
+              <span className="shadcn-badge shadcn-badge-cyan">{activeDetections.length} ACTIVE</span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '230px', overflowY: 'auto' }}>
+              {activeDetections.map(d => (
+                <div 
+                  key={d.id}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-sm)',
+                    background: 'rgba(15, 23, 42, 0.75)',
+                    border: d.phone ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid var(--border)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span className="mono" style={{ 
+                      fontSize: '0.75rem', 
+                      fontWeight: 700, 
+                      color: d.id.startsWith('R1') ? 'var(--accent-cyan)' : 'var(--accent-violet)' 
+                    }}>
+                      {d.id}
+                    </span>
+                    <div>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f8fafc' }}>{d.name}</div>
+                      <div style={{ fontSize: '0.68rem', color: EMOTION_COLORS[d.act] || 'var(--muted-foreground)', textTransform: 'capitalize' }}>
+                        {d.act}
                       </div>
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    {Object.entries(face.expressions).sort((a,b) => b[1] - a[1]).slice(0, 3).map(([emo, val]) => (
-                      <div key={emo}>
-                        <div className="flex justify-between text-[10px] mb-1">
-                          <span className="capitalize text-slate-400">{emo}</span>
-                          <span className="font-mono text-slate-500">{(val * 100).toFixed(0)}%</span>
-                        </div>
-                        <div className="h-1 bg-slate-700 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full transition-all duration-500" 
-                            style={{ 
-                              width: `${val * 100}%`, 
-                              backgroundColor: EMOTION_COLORS[emo] || '#fff'
-                            }} 
-                          />
-                        </div>
-                      </div>
-                    ))}
+                  <div style={{ textAlign: 'right' }}>
+                    <div className="mono" style={{ fontSize: '0.85rem', fontWeight: 700, color: d.attn >= 80 ? '#10b981' : '#f59e0b' }}>
+                      {d.attn}%
+                    </div>
+                    {d.phone && (
+                      <span className="shadcn-badge shadcn-badge-rose" style={{ fontSize: '0.6rem', padding: '1px 4px' }}>
+                        PHONE
+                      </span>
+                    )}
                   </div>
                 </div>
-              )) : (
-                <div className="flex flex-col items-center justify-center py-12 text-slate-600 italic text-sm">
-                  No faces detected in current frame
-                </div>
-              )}
+              ))}
             </div>
           </div>
 
-          {/* Stats Card */}
-          {stats && (
-            <div className="bg-indigo-600/10 p-5 rounded-2xl border border-indigo-500/20 animate-in zoom-in-95 duration-500">
-              <h3 className="flex items-center gap-2 text-sm font-bold text-indigo-400 uppercase tracking-wider mb-4">
-                <BarChart3 size={16} />
-                Analysis Results
-              </h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-white">{stats.totalFaceDetections}</div>
-                  <div className="text-[10px] text-indigo-300/60 uppercase">Detections</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-white">{stats.elapsedSeconds}s</div>
-                  <div className="text-[10px] text-indigo-300/60 uppercase">Time</div>
-                </div>
+          {/* Execution Terminal Console */}
+          <div className="sc-card" style={{ flex: 1, padding: '1.25rem', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Terminal size={15} color="#38bdf8" />
+                <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#f8fafc' }}>Engine Diagnostics Console</h3>
               </div>
+              <button 
+                className="shadcn-btn shadcn-btn-secondary" 
+                style={{ padding: '0.2rem 0.5rem', fontSize: '0.68rem' }}
+                onClick={() => setLogs([])}
+              >
+                Clear
+              </button>
             </div>
-          )}
+
+            <div 
+              ref={scrollRef}
+              style={{
+                background: 'rgba(11, 17, 32, 0.95)',
+                padding: '12px',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border)',
+                flex: 1,
+                minHeight: '180px',
+                maxHeight: '220px',
+                overflowY: 'auto',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.72rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px'
+              }}
+            >
+              <div style={{ color: '#10b981' }}>[INIT] Video Engine Ready. Hardware acceleration: Enabled.</div>
+              {logs.map(log => (
+                <div key={log.id} style={{ color: log.type === 'error' ? '#ef4444' : log.type === 'warn' ? '#f59e0b' : '#94a3b8' }}>
+                  <span style={{ color: '#64748b' }}>[{log.time}]</span> {log.msg}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>

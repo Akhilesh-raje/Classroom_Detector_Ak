@@ -1,0 +1,706 @@
+{
+  "video": "test video - real classrom.mp4",
+  "resolution": [
+    1920,
+    1080
+  ],
+  "total_physical_seats": 12,
+  "rows": {
+    "R1": {
+      "semantic": "FRONT",
+      "count": 6,
+      "seats": [
+        "R1C1",
+        "R1C2",
+        "R1C3",
+        "R1C4",
+        "R1C5",
+        "R1C6"
+      ]
+    },
+    "R2": {
+      "semantic": "BACK",
+      "count": 6,
+      "seats": [
+        "R2C1",
+        "R2C2",
+        "R2C3",
+        "R2C4",
+        "R2C5",
+        "R2C6"
+      ]
+    }
+  },
+  "frames": {
+    "30": [
+      {
+        "assigned_seat": "R1C3",
+        "status": "OK",
+        "bbox": [
+          451,
+          502,
+          735,
+          610
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R1C4",
+        "status": "OK",
+        "bbox": [
+          658,
+          531,
+          1026,
+          647
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R1C5",
+        "status": "OK",
+        "bbox": [
+          858,
+          507,
+          1258,
+          647
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R1C6",
+        "status": "OK",
+        "bbox": [
+          1200,
+          491,
+          1574,
+          660
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R2C6",
+        "status": "OK",
+        "bbox": [
+          1504,
+          473,
+          1848,
+          594
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R1C1",
+        "status": "OK",
+        "bbox": [
+          175,
+          446,
+          417,
+          546
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R1C2",
+        "status": "OK",
+        "bbox": [
+          291,
+          460,
+          551,
+          567
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R2C1",
+        "status": "OK",
+        "bbox": [
+          545,
+          455,
+          635,
+          504
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R2C2",
+        "status": "OK",
+        "bbox": [
+          651,
+          464,
+          795,
+          538
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R2C3",
+        "status": "OK",
+        "bbox": [
+          886,
+          475,
+          1014,
+          554
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R2C4",
+        "status": "OK",
+        "bbox": [
+          1114,
+          481,
+          1248,
+          567
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R2C5",
+        "status": "OK",
+        "bbox": [
+          1297,
+          440,
+          1531,
+          545
+        ],
+        "geometric_match": 1.0
+      }
+    ],
+    "90": [
+      {
+        "assigned_seat": "R1C3",
+        "status": "OK",
+        "bbox": [
+          502,
+          501,
+          782,
+          616
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R1C4",
+        "status": "OK",
+        "bbox": [
+          690,
+          550,
+          1044,
+          666
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R1C5",
+        "status": "OK",
+        "bbox": [
+          894,
+          537,
+          1296,
+          673
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R1C6",
+        "status": "OK",
+        "bbox": [
+          1228,
+          503,
+          1612,
+          679
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R2C6",
+        "status": "OK",
+        "bbox": [
+          1535,
+          497,
+          1887,
+          619
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R1C1",
+        "status": "OK",
+        "bbox": [
+          218,
+          481,
+          450,
+          574
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R1C2",
+        "status": "OK",
+        "bbox": [
+          325,
+          488,
+          585,
+          597
+        ],
+        "geometric_match": 0.46
+      },
+      {
+        "assigned_seat": "R2C1",
+        "status": "OK",
+        "bbox": [
+          577,
+          474,
+          671,
+          534
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R2C2",
+        "status": "OK",
+        "bbox": [
+          705,
+          475,
+          833,
+          559
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R2C4",
+        "status": "OK",
+        "bbox": [
+          1150,
+          514,
+          1278,
+          599
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R2C5",
+        "status": "OK",
+        "bbox": [
+          1329,
+          458,
+          1563,
+          570
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "UNASSIGNED",
+        "status": "UNASSIGNED",
+        "bbox": [
+          1429,
+          469,
+          1513,
+          501
+        ],
+        "geometric_match": 0.0
+      }
+    ],
+    "150": [
+      {
+        "assigned_seat": "R1C3",
+        "status": "OK",
+        "bbox": [
+          494,
+          536,
+          766,
+          650
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R1C4",
+        "status": "OK",
+        "bbox": [
+          715,
+          584,
+          1033,
+          689
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R1C5",
+        "status": "OK",
+        "bbox": [
+          896,
+          564,
+          1282,
+          700
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R1C6",
+        "status": "OK",
+        "bbox": [
+          1216,
+          533,
+          1596,
+          708
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R2C6",
+        "status": "OK",
+        "bbox": [
+          1524,
+          514,
+          1874,
+          642
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R1C1",
+        "status": "OK",
+        "bbox": [
+          205,
+          512,
+          439,
+          604
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R1C2",
+        "status": "OK",
+        "bbox": [
+          309,
+          518,
+          571,
+          625
+        ],
+        "geometric_match": 0.45
+      },
+      {
+        "assigned_seat": "R2C1",
+        "status": "OK",
+        "bbox": [
+          550,
+          508,
+          664,
+          575
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R2C2",
+        "status": "OK",
+        "bbox": [
+          696,
+          510,
+          816,
+          590
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R2C4",
+        "status": "OK",
+        "bbox": [
+          1137,
+          538,
+          1265,
+          623
+        ],
+        "geometric_match": 0.45
+      },
+      {
+        "assigned_seat": "R2C5",
+        "status": "OK",
+        "bbox": [
+          1309,
+          490,
+          1547,
+          599
+        ],
+        "geometric_match": 0.46
+      }
+    ],
+    "210": [
+      {
+        "assigned_seat": "R1C3",
+        "status": "OK",
+        "bbox": [
+          476,
+          545,
+          756,
+          658
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R1C4",
+        "status": "OK",
+        "bbox": [
+          703,
+          597,
+          1017,
+          702
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R1C5",
+        "status": "OK",
+        "bbox": [
+          881,
+          569,
+          1269,
+          705
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R1C6",
+        "status": "OK",
+        "bbox": [
+          1201,
+          539,
+          1581,
+          715
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R2C6",
+        "status": "OK",
+        "bbox": [
+          1506,
+          527,
+          1852,
+          653
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R1C1",
+        "status": "OK",
+        "bbox": [
+          187,
+          518,
+          425,
+          610
+        ],
+        "geometric_match": 0.45
+      },
+      {
+        "assigned_seat": "R1C2",
+        "status": "OK",
+        "bbox": [
+          281,
+          525,
+          553,
+          633
+        ],
+        "geometric_match": 0.45
+      },
+      {
+        "assigned_seat": "R2C1",
+        "status": "OK",
+        "bbox": [
+          535,
+          517,
+          643,
+          588
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R2C2",
+        "status": "OK",
+        "bbox": [
+          690,
+          509,
+          806,
+          590
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R2C3",
+        "status": "OK",
+        "bbox": [
+          892,
+          533,
+          1012,
+          612
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R2C4",
+        "status": "OK",
+        "bbox": [
+          1122,
+          551,
+          1250,
+          632
+        ],
+        "geometric_match": 0.45
+      },
+      {
+        "assigned_seat": "R2C5",
+        "status": "OK",
+        "bbox": [
+          1370,
+          487,
+          1528,
+          595
+        ],
+        "geometric_match": 0.45
+      }
+    ],
+    "270": [
+      {
+        "assigned_seat": "R1C3",
+        "status": "OK",
+        "bbox": [
+          472,
+          551,
+          754,
+          664
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R1C4",
+        "status": "OK",
+        "bbox": [
+          702,
+          616,
+          998,
+          716
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R1C5",
+        "status": "OK",
+        "bbox": [
+          891,
+          577,
+          1263,
+          714
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R1C6",
+        "status": "OK",
+        "bbox": [
+          1204,
+          548,
+          1582,
+          725
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R2C6",
+        "status": "OK",
+        "bbox": [
+          1502,
+          539,
+          1854,
+          662
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R1C1",
+        "status": "OK",
+        "bbox": [
+          185,
+          529,
+          423,
+          617
+        ],
+        "geometric_match": 0.44
+      },
+      {
+        "assigned_seat": "R1C2",
+        "status": "OK",
+        "bbox": [
+          280,
+          536,
+          556,
+          643
+        ],
+        "geometric_match": 0.44
+      },
+      {
+        "assigned_seat": "R2C1",
+        "status": "OK",
+        "bbox": [
+          539,
+          525,
+          647,
+          598
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R2C2",
+        "status": "OK",
+        "bbox": [
+          689,
+          518,
+          825,
+          598
+        ],
+        "geometric_match": 1.0
+      },
+      {
+        "assigned_seat": "R2C3",
+        "status": "OK",
+        "bbox": [
+          892,
+          543,
+          1018,
+          622
+        ],
+        "geometric_match": 0.45
+      },
+      {
+        "assigned_seat": "R2C4",
+        "status": "OK",
+        "bbox": [
+          1122,
+          554,
+          1250,
+          640
+        ],
+        "geometric_match": 0.44
+      },
+      {
+        "assigned_seat": "R2C5",
+        "status": "OK",
+        "bbox": [
+          1304,
+          492,
+          1516,
+          606
+        ],
+        "geometric_match": 0.45
+      },
+      {
+        "assigned_seat": "UNASSIGNED",
+        "status": "UNASSIGNED",
+        "bbox": [
+          286,
+          548,
+          758,
+          662
+        ],
+        "geometric_match": 0.0
+      }
+    ]
+  }
+}

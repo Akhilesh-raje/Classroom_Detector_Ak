@@ -1,0 +1,202 @@
+{
+  "source": "person_fiducial",
+  "confidence": 1.0,
+  "frame_size": [
+    1920,
+    1080
+  ],
+  "n_rows": 2,
+  "n_persons_used": 12,
+  "desks": [
+    {
+      "id": "bench_01",
+      "row": 0,
+      "y_band": 604.4,
+      "x_left": 114.2,
+      "x_right": 1919,
+      "length_px": 1804.8,
+      "n_seats": 9,
+      "centerline": [
+        [
+          114,
+          604
+        ],
+        [
+          1919,
+          604
+        ]
+      ],
+      "center": [
+        1016.6,
+        492.4
+      ]
+    },
+    {
+      "id": "bench_02",
+      "row": 1,
+      "y_band": 722.4,
+      "x_left": 439.2,
+      "x_right": 1674.8,
+      "length_px": 1235.6,
+      "n_seats": 5,
+      "centerline": [
+        [
+          439,
+          722
+        ],
+        [
+          1674,
+          722
+        ]
+      ],
+      "center": [
+        1057.0,
+        580.5
+      ]
+    }
+  ],
+  "seats": [
+    {
+      "id": "seat_01",
+      "desk_id": "bench_01",
+      "row": 0,
+      "col": 1,
+      "position": [
+        214.5,
+        492.4
+      ]
+    },
+    {
+      "id": "seat_02",
+      "desk_id": "bench_01",
+      "row": 0,
+      "col": 2,
+      "position": [
+        415.0,
+        492.4
+      ]
+    },
+    {
+      "id": "seat_03",
+      "desk_id": "bench_01",
+      "row": 0,
+      "col": 3,
+      "position": [
+        615.5,
+        492.4
+      ]
+    },
+    {
+      "id": "seat_04",
+      "desk_id": "bench_01",
+      "row": 0,
+      "col": 4,
+      "position": [
+        816.1,
+        492.4
+      ]
+    },
+    {
+      "id": "seat_05",
+      "desk_id": "bench_01",
+      "row": 0,
+      "col": 5,
+      "position": [
+        1016.6,
+        492.4
+      ]
+    },
+    {
+      "id": "seat_06",
+      "desk_id": "bench_01",
+      "row": 0,
+      "col": 6,
+      "position": [
+        1217.1,
+        492.4
+      ]
+    },
+    {
+      "id": "seat_07",
+      "desk_id": "bench_01",
+      "row": 0,
+      "col": 7,
+      "position": [
+        1417.7,
+        492.4
+      ]
+    },
+    {
+      "id": "seat_08",
+      "desk_id": "bench_01",
+      "row": 0,
+      "col": 8,
+      "position": [
+        1618.2,
+        492.4
+      ]
+    },
+    {
+      "id": "seat_09",
+      "desk_id": "bench_01",
+      "row": 0,
+      "col": 9,
+      "position": [
+        1818.7,
+        492.4
+      ]
+    },
+    {
+      "id": "seat_10",
+      "desk_id": "bench_02",
+      "row": 1,
+      "col": 1,
+      "position": [
+        562.8,
+        580.5
+      ]
+    },
+    {
+      "id": "seat_11",
+      "desk_id": "bench_02",
+      "row": 1,
+      "col": 2,
+      "position": [
+        809.9,
+        580.5
+      ]
+    },
+    {
+      "id": "seat_12",
+      "desk_id": "bench_02",
+      "row": 1,
+      "col": 3,
+      "position": [
+        1057.0,
+        580.5
+      ]
+    },
+    {
+      "id": "seat_13",
+      "desk_id": "bench_02",
+      "row": 1,
+      "col": 4,
+      "position": [
+        1304.1,
+        580.5
+      ]
+    },
+    {
+      "id": "seat_14",
+      "desk_id": "bench_02",
+      "row": 1,
+      "col": 5,
+      "position": [
+        1551.2,
+        580.5
+      ]
+    }
+  ],
+  "total_seats": 14,
+  "note": "Seat geometry derived from person-fiducial desk inference \u2014 persons locate the desk, desk defines the seats. No seat count or row count was assumed."
+}

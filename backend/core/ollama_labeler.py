@@ -174,3 +174,8 @@ class OllamaLabeler:
 
 # Singleton
 ollama_labeler = OllamaLabeler()
+import importlib
+_mod = importlib.import_module("core.analytics.ollama_labeler")
+for _k, _v in _mod.__dict__.items():
+    if not _k.startswith("__"):
+        globals()[_k] = _v

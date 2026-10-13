@@ -1,0 +1,15 @@
+import sqlite3
+conn = sqlite3.connect('backend/smartclass.db')
+cursor = conn.cursor()
+cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+tables = [row[0] for row in cursor.fetchall()]
+print(f'Tables: {tables}')
+cursor.execute('SELECT COUNT(*) FROM students')
+print(f'Students: {cursor.fetchone()[0]}')
+cursor.execute('SELECT COUNT(*) FROM sessions')
+print(f'Sessions: {cursor.fetchone()[0]}')
+cursor.execute('SELECT COUNT(*) FROM attendance')
+print(f'Attendance Records: {cursor.fetchone()[0]}')
+cursor.execute('SELECT COUNT(*) FROM session_reports')
+print(f'Session Reports: {cursor.fetchone()[0]}')
+conn.close()

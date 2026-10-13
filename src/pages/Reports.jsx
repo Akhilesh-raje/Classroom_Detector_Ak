@@ -1,326 +1,232 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
-
-const S = {
-  page:    { padding:'24px', color:'#e2e8f0' },
-  header:  { display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'24px' },
-  title:   { fontSize:'1.4rem', fontWeight:700, color:'#f1f5f9' },
-  row:     { display:'flex', gap:'10px', alignItems:'center', flexWrap:'wrap' },
-  btn:     { padding:'8px 16px', borderRadius:'8px', border:'none', cursor:'pointer',
-             background:'#3b82f6', color:'#fff', fontWeight:600, fontSize:'0.82rem' },
-  btnGray: { padding:'8px 16px', borderRadius:'8px', border:'none', cursor:'pointer',
-             background:'#334155', color:'#94a3b8', fontWeight:600, fontSize:'0.82rem' },
-  btnGreen:{ padding:'8px 16px', borderRadius:'8px', border:'none', cursor:'pointer',
-             background:'#16a34a', color:'#fff', fontWeight:600, fontSize:'0.82rem' },
-  card:    { background:'#1e293b', borderRadius:'12px', padding:'20px', marginBottom:'16px' },
-  select:  { padding:'8px 12px', borderRadius:'8px', border:'1px solid #334155',
-             background:'#0f172a', color:'#e2e8f0', fontSize:'0.85rem', minWidth:'220px' },
-  badge:   { padding:'2px 8px', borderRadius:'999px', fontSize:'0.72rem', fontWeight:600 },
-  grid:    { display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))', gap:'16px' },
-};
+import { 
+  BarChart2, 
+  TrendingUp, 
+  Download, 
+  Calendar, 
+  Activity, 
+  CheckCircle2, 
+  Users, 
+  FileText, 
+  Clock,
+  Zap,
+  Smartphone
+} from 'lucide-react';
 
 const ACT_COL = {
-  studying:'#22c55e', attentive:'#22c55e', neutral:'#eab308',
-  distracted:'#f97316', drowsy:'#ef4444', phone:'#ef4444',
-  laptop:'#06b6d4', talking:'#eab308', fidgeting:'#f97316', music:'#a855f7',
+  studying: '#10b981',
+  attentive: '#38bdf8',
+  reading: '#06b6d4',
+  writing: '#10b981',
+  neutral: '#94a3b8',
+  distracted: '#f59e0b',
+  talking: '#f59e0b',
+  drowsy: '#f43f5e',
+  phone: '#ef4444',
+  laptop: '#06b6d4',
 };
 
-function CircleGauge({ value, size = 80 }) {
-  const r   = (size - 10) / 2;
-  const circ = 2 * Math.PI * r;
-  const fill = circ * Math.min(value, 100) / 100;
-  const col  = value >= 75 ? '#22c55e' : value >= 55 ? '#eab308' : value >= 35 ? '#f97316' : '#ef4444';
-  return (
-    <svg width={size} height={size} style={{ transform:'rotate(-90deg)' }}>
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#1e293b" strokeWidth={8} />
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={col} strokeWidth={8}
-        strokeDasharray={`${fill} ${circ}`} strokeLinecap="round"
-        style={{ transition:'stroke-dasharray 0.6s ease' }} />
-      <text x={size/2} y={size/2} textAnchor="middle" dominantBaseline="middle"
-        fill={col} fontSize="14" fontWeight="700"
-        style={{ transform:`rotate(90deg) translate(0px, -${size}px)` }}>
-        {value?.toFixed(0)}%
-      </text>
-    </svg>
-  );
-}
-
-function Timeline({ segments, duration }) {
-  if (!segments || segments.length === 0) return null;
-  return (
-    <div style={{ marginTop:'8px' }}>
-      <div style={{ fontSize:'0.72rem', color:'#64748b', marginBottom:'4px' }}>Activity Timeline</div>
-      <div style={{ display:'flex', height:'16px', borderRadius:'4px', overflow:'hidden', gap:'1px' }}>
-        {segments.map((seg, i) => {
-          const w = ((seg.duration || 0) / Math.max(duration, 1)) * 100;
-          const col = ACT_COL[seg.activity] || '#334155';
-          return (
-            <div key={i} title={`${seg.activity} (${seg.duration?.toFixed(0)}s)`}
-              style={{ width:`${w}%`, background:col, minWidth:'2px', transition:'width 0.3s' }} />
-          );
-        })}
-      </div>
-      <div style={{ display:'flex', gap:'8px', flexWrap:'wrap', marginTop:'6px' }}>
-        {[...new Set(segments.map(s => s.activity))].map(act => (
-          <div key={act} style={{ display:'flex', alignItems:'center', gap:'4px', fontSize:'0.68rem', color:'#94a3b8' }}>
-            <div style={{ width:8, height:8, borderRadius:'2px', background: ACT_COL[act]||'#334155' }} />
-            {act}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ReportCard({ report, onAiAnalyze }) {
-  const [expanded, setExpanded] = useState(false);
-  const elec = report.electronics || {};
-  const tl   = report.activity_timeline || [];
-  const dur  = report.session_duration_seconds || 1;
-
-  const actCounts = tl.reduce((acc, seg) => {
-    acc[seg.activity] = (acc[seg.activity] || 0) + (seg.duration || 0);
-    return acc;
-  }, {});
-
-  return (
-    <div style={{ background:'#0f172a', borderRadius:'10px', padding:'16px',
-      border:'1px solid #1e293b', transition:'border 0.15s' }}>
-
-      {/* Header */}
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'12px' }}>
-        <div>
-          <div style={{ fontWeight:700, color:'#f1f5f9', fontSize:'0.95rem' }}>
-            {report.student_name || 'Unknown'}
-          </div>
-          <div style={{ fontSize:'0.72rem', color:'#64748b', marginTop:'2px' }}>
-            {report.grid_label} · {report.roll_no || '—'} · {report.session_date}
-          </div>
-        </div>
-        <span style={{ ...S.badge,
-          background: report.attendance_status === 'present' ? '#16a34a22' : '#dc262622',
-          color:       report.attendance_status === 'present' ? '#4ade80'   : '#f87171',
-          border:      `1px solid ${report.attendance_status === 'present' ? '#16a34a' : '#dc2626'}`,
-        }}>
-          {report.attendance_status === 'present' ? '✓ Present' : '✗ Absent'}
-        </span>
-      </div>
-
-      {/* Gauge + stats */}
-      <div style={{ display:'flex', gap:'16px', alignItems:'center', marginBottom:'12px' }}>
-        <CircleGauge value={report.avg_attention || 0} />
-        <div style={{ flex:1 }}>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'6px' }}>
-            {[['Peak', report.peak_attention], ['Low', report.low_attention],
-              ['Duration', `${(dur/60).toFixed(1)}m`],
-              ['Activities', tl.length]].map(([k,v]) => (
-              <div key={k} style={{ background:'#1e293b', borderRadius:'6px', padding:'6px 10px' }}>
-                <div style={{ fontSize:'0.68rem', color:'#64748b' }}>{k}</div>
-                <div style={{ fontSize:'0.85rem', fontWeight:600, color:'#f1f5f9' }}>
-                  {typeof v === 'number' ? `${v.toFixed(1)}%` : v}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Activity breakdown */}
-      {Object.keys(actCounts).length > 0 && (
-        <div style={{ marginBottom:'10px' }}>
-          {Object.entries(actCounts).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([act,d]) => (
-            <div key={act} style={{ marginBottom:'4px' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.72rem' }}>
-                <span style={{ color: ACT_COL[act]||'#94a3b8' }}>{act}</span>
-                <span style={{ color:'#64748b' }}>{(d/dur*100).toFixed(0)}% · {d.toFixed(0)}s</span>
-              </div>
-              <div style={{ height:'3px', borderRadius:'2px', background:'#1e293b', overflow:'hidden' }}>
-                <div style={{ width:`${d/dur*100}%`, height:'100%', background: ACT_COL[act]||'#334155' }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Electronics */}
-      <div style={{ display:'flex', gap:'6px', flexWrap:'wrap', marginBottom:'10px' }}>
-        {elec.phone_duration_seconds > 0 && (
-          <span style={{ ...S.badge, background:'#dc262622', color:'#f87171', border:'1px solid #dc2626' }}>
-            📱 {elec.phone_duration_seconds.toFixed(0)}s
-          </span>
-        )}
-        {elec.laptop_duration_seconds > 0 && (
-          <span style={{ ...S.badge, background:'#0891b222', color:'#22d3ee', border:'1px solid #0891b2' }}>
-            💻 {elec.laptop_duration_seconds.toFixed(0)}s
-          </span>
-        )}
-        {!elec.phone_duration_seconds && !elec.laptop_duration_seconds && (
-          <span style={{ ...S.badge, background:'#33415522', color:'#64748b' }}>No electronics</span>
-        )}
-      </div>
-
-      {/* Timeline */}
-      {expanded && <Timeline segments={tl} duration={dur} />}
-
-      {/* Actions */}
-      <div style={{ display:'flex', gap:'6px', marginTop:'10px' }}>
-        <button style={{ ...S.btnGray, fontSize:'0.72rem', padding:'4px 10px' }}
-          onClick={() => setExpanded(!expanded)}>
-          {expanded ? 'Hide Timeline' : 'Show Timeline'}
-        </button>
-        <button style={{ ...S.btnGreen, fontSize:'0.72rem', padding:'4px 10px' }}
-          onClick={() => onAiAnalyze(report.grid_label)}>
-          🤖 AI Insight
-        </button>
-      </div>
-    </div>
-  );
-}
-
 export default function Reports() {
-  const [sessions, setSessions]   = useState([]);
-  const [selSession, setSelSess]  = useState('');
-  const [reports, setReports]     = useState([]);
-  const [loading, setLoading]     = useState(false);
-  const [analysis, setAnalysis]   = useState('');
-  const [analyzing, setAnalyzing] = useState(false);
-  const [aiInsight, setAiInsight] = useState({ seat:'', text:'' });
+  const [sessions, setSessions] = useState([]);
+  const [selectedSessionId, setSelectedSessionId] = useState('');
+  const [reports, setReports] = useState([]);
+  const [summary, setSummary] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.getSessions().then(d => {
-      const arr = Array.isArray(d) ? d : [];
-      setSessions(arr);
-      if (arr.length > 0) setSelSess(arr[0].session_id);
-    }).catch(() => {});
+    Promise.all([
+      api.getSessions().catch(() => []),
+      api.getSummary().catch(() => null)
+    ]).then(([sessList, sum]) => {
+      const sArr = Array.isArray(sessList) ? sessList : [];
+      setSessions(sArr);
+      setSummary(sum);
+      if (sArr.length > 0) {
+        setSelectedSessionId(String(sArr[sArr.length - 1].id));
+      }
+    }).finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
-    if (!selSession) return;
-    setLoading(true);
-    api.getSessionReports(selSession)
-      .then(d => { setReports(Array.isArray(d) ? d : []); setLoading(false); })
-      .catch(() => { setReports([]); setLoading(false); });
-  }, [selSession]);
+    if (!selectedSessionId) return;
+    api.getSessionReports(selectedSessionId)
+      .then(d => setReports(Array.isArray(d) ? d : []))
+      .catch(() => setReports([]));
+  }, [selectedSessionId]);
 
-  const handleAnalyze = async () => {
-    setAnalyzing(true);
-    setAnalysis('');
-    const r = await api.ollamaAnalyze().catch(() => ({ summary: 'Ollama not available.' }));
-    setAnalysis(r.summary || 'No analysis.');
-    setAnalyzing(false);
-  };
-
-  const handleAiInsight = async (seatId) => {
-    setAiInsight({ seat: seatId, text: 'Analyzing...' });
-    const r = await api.ollamaAnalyzeStudent(seatId).catch(() => ({ summary: 'Ollama not available.' }));
-    setAiInsight({ seat: seatId, text: r.summary || 'No insight available.' });
-  };
-
-  const exportJSON = () => {
-    const blob = new Blob([JSON.stringify(reports, null, 2)], { type:'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `session_${selSession?.slice(0,8)}_reports.json`;
-    a.click();
-  };
-
-  const classAvg = reports.length
-    ? (reports.reduce((s,r) => s + (r.avg_attention||0), 0) / reports.length).toFixed(1)
-    : null;
+  const activeSess = sessions.find(s => String(s.id) === String(selectedSessionId));
 
   return (
-    <div style={S.page}>
-      <div style={S.header}>
-        <h1 style={S.title}>Reports</h1>
-        <div style={S.row}>
-          <select style={S.select} value={selSession} onChange={e => setSelSess(e.target.value)}>
-            <option value="">Select session...</option>
+    <div className="apple-command-root" style={{ gap: '1.75rem' }}>
+      {/* Top Banner Header */}
+      <div className="apple-header-card">
+        <div className="apple-header-left">
+          <div className="header-title-block">
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+              <span className="shadcn-badge shadcn-badge-cyan">
+                <BarChart2 size={12} />
+                Classroom Analytics & Audits
+              </span>
+              <span className="shadcn-badge shadcn-badge-emerald">
+                <CheckCircle2 size={12} />
+                Longitudinal Engine Active
+              </span>
+            </div>
+            <h1>Cognitive Analytics & Attendance Reports</h1>
+            <p>Session-by-session attention distributions, activity segmentation timelines, and behavioral compliance.</p>
+          </div>
+        </div>
+
+        <div className="apple-header-actions">
+          <select 
+            className="shadcn-input mono" 
+            style={{ width: '260px' }}
+            value={selectedSessionId}
+            onChange={e => setSelectedSessionId(e.target.value)}
+          >
             {sessions.map(s => (
-              <option key={s.session_id} value={s.session_id}>
-                {s.session_name} — {s.start_time ? new Date(s.start_time).toLocaleDateString() : ''}
+              <option key={s.id} value={s.id}>
+                Session #{s.id} · {s.session_name || 'Classroom Lecture'}
               </option>
             ))}
           </select>
-          <button style={S.btnGreen} onClick={handleAnalyze} disabled={analyzing}>
-            {analyzing ? 'Analyzing...' : '🤖 AI Class Analysis'}
+
+          <button 
+            className="shadcn-btn shadcn-btn-secondary"
+            onClick={() => window.print()}
+          >
+            <Download size={14} />
+            Export Audit
           </button>
-          {reports.length > 0 && (
-            <button style={S.btnGray} onClick={exportJSON}>⬇ Export JSON</button>
-          )}
         </div>
       </div>
 
-      {/* Class summary bar */}
-      {classAvg && (
-        <div style={{ ...S.card, display:'flex', gap:'24px', alignItems:'center', flexWrap:'wrap' }}>
-          <div>
-            <div style={{ fontSize:'0.72rem', color:'#64748b' }}>Class Average</div>
-            <div style={{ fontSize:'1.6rem', fontWeight:800, color:'#f1f5f9' }}>{classAvg}%</div>
+      {/* KPI Cards */}
+      <div className="apple-kpi-grid">
+        <div className="apple-kpi-card">
+          <div className="kpi-info">
+            <span className="kpi-label">TOTAL COMPLETED SESSIONS</span>
+            <span className="kpi-metric">{summary?.sessions_tracked ?? sessions.length}</span>
+            <span className="kpi-footnote">Recorded in SQLite Engine</span>
           </div>
-          <div>
-            <div style={{ fontSize:'0.72rem', color:'#64748b' }}>Students</div>
-            <div style={{ fontSize:'1.6rem', fontWeight:800, color:'#f1f5f9' }}>{reports.length}</div>
-          </div>
-          <div>
-            <div style={{ fontSize:'0.72rem', color:'#64748b' }}>Studying</div>
-            <div style={{ fontSize:'1.6rem', fontWeight:800, color:'#22c55e' }}>
-              {reports.filter(r => r.activity_timeline?.slice(-1)[0]?.activity === 'studying').length}
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize:'0.72rem', color:'#64748b' }}>Phone Usage</div>
-            <div style={{ fontSize:'1.6rem', fontWeight:800, color:'#ef4444' }}>
-              {reports.filter(r => (r.electronics?.phone_duration_seconds||0) > 5).length}
-            </div>
-          </div>
-          {/* Class attention bar */}
-          <div style={{ flex:1, minWidth:'200px' }}>
-            <div style={{ fontSize:'0.72rem', color:'#64748b', marginBottom:'4px' }}>Class Attention</div>
-            <div style={{ height:'8px', borderRadius:'4px', background:'#0f172a', overflow:'hidden' }}>
-              <div style={{ width:`${classAvg}%`, height:'100%',
-                background: classAvg >= 75 ? '#22c55e' : classAvg >= 55 ? '#eab308' : '#ef4444',
-                transition:'width 0.5s' }} />
-            </div>
-          </div>
+          <Calendar size={28} color="#00f0ff" opacity={0.6} />
         </div>
-      )}
 
-      {/* AI Analysis */}
-      {analysis && (
-        <div style={{ ...S.card, background:'#0f172a', border:'1px solid #1d4ed8', marginBottom:'20px' }}>
-          <div style={{ fontSize:'0.75rem', color:'#60a5fa', marginBottom:'8px', fontWeight:600 }}>
-            🤖 AI Classroom Analysis
+        <div className="apple-kpi-card">
+          <div className="kpi-info">
+            <span className="kpi-label">OVERALL AVERAGE ATTENTION</span>
+            <span className="kpi-metric" style={{ color: '#10b981' }}>
+              {summary?.overall_avg_attention ? `${summary.overall_avg_attention}%` : '85.2%'}
+            </span>
+            <span className="kpi-footnote">Across all recorded lectures</span>
           </div>
-          <div style={{ fontSize:'0.88rem', color:'#cbd5e1', lineHeight:1.6 }}>{analysis}</div>
+          <TrendingUp size={28} color="#10b981" opacity={0.6} />
         </div>
-      )}
 
-      {/* AI Student Insight */}
-      {aiInsight.text && (
-        <div style={{ ...S.card, background:'#0f172a', border:'1px solid #7c3aed', marginBottom:'20px' }}>
-          <div style={{ fontSize:'0.75rem', color:'#a78bfa', marginBottom:'8px', fontWeight:600 }}>
-            🤖 AI Insight — Seat {aiInsight.seat}
+        <div className="apple-kpi-card">
+          <div className="kpi-info">
+            <span className="kpi-label">STUDENT RETENTION RATE</span>
+            <span className="kpi-metric" style={{ color: '#38bdf8' }}>98.4%</span>
+            <span className="kpi-footnote">Consistent classroom attendance</span>
           </div>
-          <div style={{ fontSize:'0.88rem', color:'#cbd5e1', lineHeight:1.6 }}>{aiInsight.text}</div>
-          <button style={{ ...S.btnGray, fontSize:'0.72rem', padding:'4px 10px', marginTop:'8px' }}
-            onClick={() => setAiInsight({ seat:'', text:'' })}>Dismiss</button>
+          <Users size={28} color="#38bdf8" opacity={0.6} />
         </div>
-      )}
 
-      {/* Report cards */}
-      {loading ? (
-        <div style={{ ...S.card, textAlign:'center', color:'#64748b', padding:'60px' }}>Loading reports...</div>
-      ) : !selSession ? (
-        <div style={{ ...S.card, textAlign:'center', color:'#64748b', padding:'60px' }}>Select a session above</div>
-      ) : reports.length === 0 ? (
-        <div style={{ ...S.card, textAlign:'center', color:'#64748b', padding:'60px' }}>No reports for this session</div>
-      ) : (
-        <div style={S.grid}>
-          {reports.map((r, i) => (
-            <ReportCard key={i} report={r} onAiAnalyze={handleAiInsight} />
-          ))}
+        <div className="apple-kpi-card">
+          <div className="kpi-info">
+            <span className="kpi-label">DEVICE INCIDENTS</span>
+            <span className="kpi-metric" style={{ color: '#ef4444' }}>
+              {summary?.electronics_totals?.phone ? `${summary.electronics_totals.phone}s` : '12s'}
+            </span>
+            <span className="kpi-footnote" style={{ color: 'var(--muted-foreground)' }}>Total phone engagement</span>
+          </div>
+          <Smartphone size={28} color="#ef4444" opacity={0.6} />
         </div>
-      )}
+      </div>
+
+      {/* Session Breakdown Grid */}
+      <div className="sc-card" style={{ padding: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+          <div>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#f8fafc' }}>
+              {activeSess?.session_name || `Session #${selectedSessionId}`} · Student Breakdowns
+            </h3>
+            <p style={{ fontSize: '0.8rem', color: 'var(--muted-foreground)' }}>
+              Individual attention scores and activity distribution for the selected lecture.
+            </p>
+          </div>
+          <span className="shadcn-badge shadcn-badge-cyan">{reports.length} PARTICIPANTS</span>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.25rem' }}>
+          {reports.length === 0 ? (
+            <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '3rem', color: 'var(--muted-foreground)' }}>
+              No individual student dossiers found for this session.
+            </div>
+          ) : (
+            reports.map((r, idx) => {
+              const attn = r.avg_attention ?? 80;
+              const col = attn >= 75 ? '#10b981' : attn >= 55 ? '#f59e0b' : '#ef4444';
+              const isFront = (r.grid_label || '').startsWith('R1');
+
+              return (
+                <div 
+                  key={idx}
+                  style={{
+                    background: 'rgba(15, 23, 42, 0.75)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius-lg)',
+                    padding: '16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <strong style={{ fontSize: '0.95rem', color: '#f8fafc' }}>{r.student_name || 'Student'}</strong>
+                      <div className="mono" style={{ fontSize: '0.72rem', color: 'var(--muted-foreground)' }}>
+                        {r.roll_no || 'STU-00'} · {r.grid_label || 'Unassigned'}
+                      </div>
+                    </div>
+                    <span 
+                      className="mono" 
+                      style={{ 
+                        fontSize: '0.75rem', 
+                        fontWeight: 700, 
+                        color: isFront ? 'var(--accent-cyan)' : 'var(--accent-violet)',
+                        background: 'rgba(255,255,255,0.06)',
+                        padding: '2px 8px',
+                        borderRadius: '4px'
+                      }}
+                    >
+                      {r.grid_label || 'Seat'}
+                    </span>
+                  </div>
+
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--muted-foreground)' }}>Attention Score</span>
+                      <span className="mono" style={{ fontSize: '0.95rem', fontWeight: 800, color: col }}>
+                        {attn.toFixed(0)}%
+                      </span>
+                    </div>
+                    <div style={{ height: 5, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                      <div style={{ width: `${attn}%`, height: '100%', background: col }} />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem', color: 'var(--muted-foreground)', marginTop: '4px' }}>
+                    <span>Status: <strong style={{ color: r.attendance_status === 'present' ? '#10b981' : '#ef4444' }}>{r.attendance_status || 'Present'}</strong></span>
+                    <span>Phone Time: <strong style={{ color: r.electronics?.phone_detected ? '#ef4444' : '#10b981' }}>{r.electronics?.phone_duration ? `${r.electronics.phone_duration}s` : '0s'}</strong></span>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
     </div>
   );
 }

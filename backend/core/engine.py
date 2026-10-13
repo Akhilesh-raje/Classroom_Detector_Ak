@@ -48,11 +48,21 @@ from core.config import (
     SMALL_BBOX_FRAC, FACE_MATCH_INTERVAL,
 )
 from core.stabilizer import SeatStabilizer
+from core.topology import PhysicalSeat, ClassroomTopology, TopologyConfig, TopologyDiscovery, PersonTrack
+from core.seat_associator import SeatAssociator, SeatAssignment
 from core.student_state import StudentState
 from core.behavior_tracker import BehaviorTracker
 from core.detector import detect_faces_and_phones, analyze_face_crop, _is_within_padded_bbox
 from core.face_recognition_engine import face_rec_engine
 from core.ollama_labeler import ollama_labeler
+from core.pipeline import (
+    DetectionStage,
+    AssociationStage,
+    AnalysisStage,
+    OutputStage,
+    PipelineScheduler,
+)
+from core.scene import SceneState, EntityState
 
 # ── Safe Colorama Setup ───────────────────────────────────────────────────────
 try:
@@ -191,6 +201,25 @@ class ClassroomEngine:
         # Registered faces for recognition: list of (student_id, name, encoding)
         self.registered_faces: list = []
 
+        # Spatial Perception V2.1 — Discovered Physical Topology
+        self._classroom_layout = None   # Legacy ClassroomLayout | None
+        self._calibrated       = False  # True once calibrate() has run
+        self.topology: ClassroomTopology | None = None
+        self.topology_config   = TopologyConfig(mode="auto")
+        self.associator        = SeatAssociator()
+        self._seat_label_to_id : dict = {}
+        self._seat_id_to_label : dict = {}
+        self.frame_count       = 0
+        self.benchmark_records : list = []
+
+        # Modular Pipeline Stages (Scene Intelligence Engine)
+        self.detection_stage   = DetectionStage(min_conf=YOLO_CONF)
+        self.association_stage = AssociationStage()
+        self.analysis_stage    = AnalysisStage()
+        self.output_stage      = OutputStage()
+        self.scheduler         = PipelineScheduler()
+        self.last_scene_state: SceneState | None = None
+
         log.info(f"ClassroomEngine initialized (max_seats={max_seats}, session={self.session_id[:8]}…)")
         if not face_rec_engine.is_reliable:
             log.warning(
@@ -208,6 +237,15 @@ class ClassroomEngine:
         self.behavior_trackers   = {}
         self.face_match_counters = {}
         self.pending_attendance_events = []
+        self._classroom_layout = None
+        self._calibrated       = False
+        self.topology          = None
+        self.associator.reset()
+        self._seat_label_to_id = {}
+        self._seat_id_to_label = {}
+        self.frame_count       = 0
+        self.benchmark_records = []
+        self.last_scene_state  = None
         # Keep registered_faces across resets
 
     def load_registered_faces(self, students: list):
@@ -219,6 +257,175 @@ class ClassroomEngine:
                 if enc is not None:
                     self.registered_faces.append((s.id, s.name, enc))
         log.info(f"Loaded {len(self.registered_faces)} registered face(s) for recognition")
+
+    def calibrate(self, frames: list, W_px: int, H_px: int, config: TopologyConfig | None = None) -> None:
+        """
+        Run spatial calibration from a list of BGR frames.
+        Supports both V2.1/V2.2 baseline ('auto') and Structure AI ('structure_ai').
+        """
+        if self._calibrated and self.topology is not None:
+            return
+
+        if config is not None:
+            self.topology_config = config
+
+        if getattr(self.topology_config, "mode", "auto") == "structure_ai":
+            return self.calibrate_structure(frames, W_px, H_px)
+
+        discovery = TopologyDiscovery(config=self.topology_config, frame_size=(W_px, H_px))
+
+        for f_idx, frame in enumerate(frames):
+            try:
+                raw_dets, _, _, _ = detect_faces_and_phones(frame, min_conf=YOLO_CONF, persist=True)
+                discovery.accumulate_raw(raw_dets, frame_idx=f_idx)
+            except Exception as e:
+                log.warning(f"calibrate frame {f_idx} failed: {e}")
+
+        topo = discovery.estimate(min_observations=max(2, len(frames) // 6))
+        if not topo or not topo.seats:
+            log.warning("calibrate(): Topology discovery produced no seats — falling back to discovery mode")
+            return
+
+        self.topology = topo
+        self.associator = SeatAssociator()
+        self._seat_label_to_id = {s.label: i + 1 for i, s in enumerate(topo.seats)}
+        self._seat_id_to_label = {i + 1: s.label for i, s in enumerate(topo.seats)}
+
+        # Pre-seed legacy stabiliser with discovered seat positions
+        n = len(topo.seats)
+        self.stabilizer = SeatStabilizer(max_seats=min(n + 2, 20))
+        scaffold = []
+        for s_idx, s in enumerate(topo.seats):
+            scaffold.append({
+                "id": s_idx + 1,
+                "center": s.anchor,
+                "last_seen": time.time(),
+                "last_bbox": s.bbox,
+                "missed": 0,
+                "_row": s.row,
+                "_col": s.col,
+                "label": s.label,
+            })
+        self.stabilizer.seats = scaffold
+        self.stabilizer.next_seat_id = n + 1
+        self.stabilizer.seats_sorted = True
+        self.stabilizer._locked = True
+
+        self._calibrated = True
+        log.info(
+            f"calibrate(): locked {n} seats across {topo.rows} row(s) "
+            f"(seats per row: {topo.cols_per_row}, conf={topo.confidence:.2f})"
+        )
+        for rg in topo.row_geometries:
+            log.info(f"  Row {rg.label} = {rg.semantic} (y_median={rg.y_median:.1f}, band=[{rg.y_min:.1f}, {rg.y_max:.1f}])")
+
+    def calibrate_structure(self, frames: list, W_px: int, H_px: int) -> None:
+        """
+        Calibrates classroom using pure Structure AI (geometry-first topology).
+        Completely decouples physical seat topology from person detections.
+
+        Uses TopologyBuilder directly — the geometry-first topology defines
+        seats from furniture/spatial priors, not from depth estimation or
+        neural perception models.
+        """
+        if self._calibrated and self.topology is not None and self.topology.source == "structure_ai":
+            return
+
+        from core.structure.topology_builder import TopologyBuilder
+        builder = TopologyBuilder(frame_size=(W_px, H_px))
+        struct_map = builder.build_from_geometry([], depth_map=None)
+        topo = ClassroomTopology.from_structure_map(struct_map)
+
+        self.topology = topo
+        self.associator = SeatAssociator()
+        self._seat_label_to_id = {s.label: i + 1 for i, s in enumerate(topo.seats)}
+        self._seat_id_to_label = {i + 1: s.label for i, s in enumerate(topo.seats)}
+
+        n = len(topo.seats)
+        self.stabilizer = SeatStabilizer(max_seats=min(n + 2, 20))
+        scaffold = []
+        for s_idx, s in enumerate(topo.seats):
+            scaffold.append({
+                "id": s_idx + 1,
+                "center": s.anchor,
+                "last_seen": time.time(),
+                "last_bbox": s.bbox,
+                "missed": 0,
+                "_row": s.row,
+                "_col": s.col,
+                "label": s.label,
+                "seat_id": s.seat_id,
+            })
+        self.stabilizer.seats = scaffold
+        self.stabilizer.next_seat_id = n + 1
+        self.stabilizer.seats_sorted = True
+        self.stabilizer._locked = True
+        self._calibrated = True
+
+        log.info(
+            f"calibrate_structure(): locked {n} physical seats across {topo.rows} bench(es) "
+            f"(seats per row: {topo.cols_per_row}, conf={topo.confidence:.2f})"
+        )
+        for rg in topo.row_geometries:
+            log.info(f"  Bench/Row {rg.label} = {rg.semantic} (desk_y={rg.y_median:.1f}, band=[{rg.y_min:.1f}, {rg.y_max:.1f}])")
+
+    def apply_topology(self, topo: ClassroomTopology) -> None:
+        """Explicitly apply a physical ClassroomTopology (e.g. 3x2 grid)."""
+        self.topology = topo
+        self.associator = SeatAssociator()
+        self._seat_label_to_id = {s.label: i + 1 for i, s in enumerate(topo.seats)}
+        self._seat_id_to_label = {i + 1: s.label for i, s in enumerate(topo.seats)}
+
+        n = len(topo.seats)
+        self.stabilizer = SeatStabilizer(max_seats=min(n + 2, 20))
+        scaffold = []
+        for s_idx, s in enumerate(topo.seats):
+            scaffold.append({
+                "id": s_idx + 1,
+                "center": s.anchor,
+                "last_seen": time.time(),
+                "last_bbox": s.bbox,
+                "missed": 0,
+                "_row": s.row,
+                "_col": s.col,
+                "label": s.label,
+                "seat_id": s.seat_id,
+            })
+        self.stabilizer.seats = scaffold
+        self.stabilizer.next_seat_id = n + 1
+        self.stabilizer.seats_sorted = True
+        self.stabilizer._locked = True
+        self._calibrated = True
+        log.info(f"apply_topology(): locked {n} physical seats across {topo.rows} rows (cols: {topo.cols_per_row})")
+
+    def _seat_to_grid_label(self, sid: int) -> str:
+        """
+        Derive R{r}C{c} label for a seat.
+        Prefers V2.1 Topology mapping, then scaffold metadata, then row_layout.
+        """
+        if sid in self._seat_id_to_label:
+            return self._seat_id_to_label[sid]
+
+        # Fast path: scaffold metadata stored on the seat dict itself
+        for seat in self.stabilizer.seats:
+            if seat["id"] == sid:
+                if "label" in seat:
+                    return seat["label"]
+                row = seat.get("_row")
+                col = seat.get("_col")
+                if row is not None and col is not None:
+                    return f"R{row+1}C{col}"
+                break
+
+        # Fallback: use discovered row_layout from EMA-converged positions
+        layout = getattr(self.stabilizer, "row_layout", [])
+        if layout:
+            offset = sid - 1
+            for r_idx, count in enumerate(layout):
+                if offset < count:
+                    return f"R{r_idx + 1}C{offset + 1}"
+                offset -= count
+        return f"S{sid}"  # layout not yet discovered
 
     def _state(self, seat_id: int) -> StudentState:
         if seat_id not in self.student_states:
@@ -233,226 +440,187 @@ class ClassroomEngine:
     def process_single_frame(self, frame, W_px, H_px, persist=True) -> list:
         """
         Process a single image frame (live webcam or video).
-        Returns a list of structured face prediction dicts.
+        Modular pipeline architecture (Phase 0 Universal Scene Intelligence Engine):
+          Stage 1 (DetectionStage): YOLO person & peripheral detection + track formulation
+          Stage 2 (AssociationStage): Hungarian spatial association to physical seats
+          Stage 3 (AnalysisStage): Multimodal face, attention, behavior, and identity
+          Stage 4 (OutputStage): Output formatting + Universal Scene Representation (SceneState)
+        Returns:
+            List of structured face prediction dicts (compatible with all API/UI consumers)
         """
-        # ── Detection ─────────────────────────────────────────────────────────
-        raw_dets, phones, laptops, earphones = detect_faces_and_phones(
-            frame, min_conf=YOLO_CONF, persist=persist
-        )
-        mapped_dets = self.stabilizer.update_and_map(raw_dets, W_px, H_px)
+        self.frame_count += 1
 
-        # ── Draw grid overlay ─────────────────────────────────────────────────
+        # ── Stage 1: Detection & Person Tracking ──────────────────────────────
+        raw_dets, phones, laptops, earphones, tracks, t_by_id = self.detection_stage.execute(
+            frame=frame,
+            persist=persist,
+            topology=self.topology,
+            frame_idx=self.frame_count,
+        )
+
+        # ── Stage 2: Spatial Association ──────────────────────────────────────
+        mapped_dets, bench_records = self.association_stage.execute(
+            tracks=tracks,
+            raw_dets=raw_dets,
+            topology=self.topology,
+            associator=self.associator,
+            seat_label_to_id=self._seat_label_to_id,
+            stabilizer=self.stabilizer,
+            frame_idx=self.frame_count,
+            W_px=W_px,
+            H_px=H_px,
+            t_by_id=t_by_id,
+        )
+        self.benchmark_records.extend(bench_records)
+
+        # ── Optional Grid Overlay ─────────────────────────────────────────────
         if self.spatial_grid is not None:
             _draw_grid_overlay(frame, self.spatial_grid)
 
-        frame_area = W_px * H_px
-        processed_faces = []
+        # ── Stage 3: Multimodal State Analysis ────────────────────────────────
+        processed_faces, new_attendance_events = self.analysis_stage.execute(
+            frame=frame,
+            mapped_dets=mapped_dets,
+            raw_dets=raw_dets,
+            phones=phones,
+            laptops=laptops,
+            earphones=earphones,
+            student_states=self.student_states,
+            behavior_trackers=self.behavior_trackers,
+            face_match_counters=self.face_match_counters,
+            registered_faces=self.registered_faces,
+            session_start_time=self.session_start_time,
+            W_px=W_px,
+            H_px=H_px,
+            spatial_grid=self.spatial_grid,
+            seat_to_grid_label_fn=self._seat_to_grid_label,
+        )
+        self.pending_attendance_events.extend(new_attendance_events)
 
-        for det in mapped_dets:
-            sid = det.get("seat_id")
-            if sid is None:
-                continue
-
-            is_ghost = det.get("ghost", False)
-            px1, py1, px2, py2 = det["person_bbox"]
-
-            # ── Phone detection ───────────────────────────────────────────────
-            phone_detected = False
-            for ph in phones:
-                if _is_within_padded_bbox(ph["bbox"], det["person_bbox"], 0.10):
-                    phone_detected = True
-                    break
-
-            # ── Laptop detection ──────────────────────────────────────────────
-            laptop_detected = False
-            for lp in laptops:
-                if _is_within_padded_bbox(lp["bbox"], det["person_bbox"], 0.10):
-                    laptop_detected = True
-                    break
-
-            # ── Earphone detection ────────────────────────────────────────────
-            earphone_detected = False
-            person_idx = None
-            for i, p in enumerate(raw_dets):
-                if p.get("id") == det.get("id"):
-                    person_idx = i
-                    break
-            if person_idx is not None:
-                for ep in earphones:
-                    if ep["person_idx"] == person_idx:
-                        earphone_detected = True
-                        break
-
-            # ── MediaPipe face analysis ───────────────────────────────────────
-            # Skip expensive MediaPipe analysis on ghost frames — use cached state
-            if is_ghost:
-                st   = self._state(sid)
-                tr   = _trend(st.attn_hist)
-                x1, y1, x2, y2 = det["bbox"]
-                processed_faces.append({
-                    "id":               sid,
-                    "bbox":             [x1, y1, x2, y2],
-                    "headPose":         {"yaw": 0.0, "pitch": 0.0, "roll": 0.0},
-                    "attentionScore":   st.attn_ema or 0.0,
-                    "attentionRaw":     st.attn_ema or 0.0,
-                    "avgAttention30":   st.avg,
-                    "attentionFactors": st.last_factors,
-                    "attentionBreakdown": st.attention_breakdown(),
-                    "emotion":          "neutral",
-                    "expressions":      {},
-                    "activity":         st.prev_act,
-                    "reconciledActivity": st.reconciled_activity()[0],
-                    "activityNote":     st.reconciled_activity()[1],
-                    "cropUsed":         "ghost",
-                    "trend":            tr,
-                    "thumbnail":        None,
-                    "phoneDetected":    False,
-                    "laptopDetected":   False,
-                    "earphoneDetected": False,
-                    "eyeOpenness":      1.0,
-                    "mouthOpen":        0.0,
-                    "gridCell":         "",
-                    "faceMatchDue":     False,
-                    "matchedStudentId": None,
-                    "studentName":      None,
-                    "matchConfidence":  0.0,
-                    "ghost":            True,
-                })
-                continue
-
-            bbox_area = (det["bbox"][2] - det["bbox"][0]) * (det["bbox"][3] - det["bbox"][1])
-            small_det = frame_area > 0 and (bbox_area / frame_area) < SMALL_BBOX_FRAC
-
-            mp_res    = None
-            used_crop = "none"
-            crop_candidates = det.get("crops", [])
-            if not crop_candidates:
-                crop_candidates = [{"name": "tight", "bbox": det["bbox"]}]
-
-            if small_det:
-                # Only try upper_body crop for small detections
-                upper = [c for c in crop_candidates if c["name"] == "upper_body"]
-                crop_candidates = upper if upper else []
-            
-            for crop_info in crop_candidates:
-                cx1, cy1, cx2, cy2 = crop_info["bbox"]
-                crop = frame[max(0, cy1):max(0, cy2), max(0, cx1):max(0, cx2)]
-                if crop.size == 0:
-                    continue
-                mp_res = analyze_face_crop(crop)
-                if mp_res:
-                    used_crop = crop_info["name"]
-                    break
-
-            # ── Extract metrics ───────────────────────────────────────────────
-            if mp_res:
-                head_pose    = mp_res["head_pose"]
-                eye_openness = mp_res["eye_openness"]
-                mouth_open   = mp_res["mouth_open"]
-                emotion      = mp_res["emotion"]
-                blendshapes  = mp_res["blendshapes"]
-            else:
-                head_pose    = {"yaw": 0.0, "pitch": 0.0, "roll": 0.0}
-                eye_openness = 1.0
-                mouth_open   = 0.0
-                emotion      = "neutral"
-                blendshapes  = {"neutral": 1.0}
-
-            st  = self._state(sid)
-            sig = st.extract_signals(
-                det["bbox"],
-                det["person_bbox"],
-                phone_detected=phone_detected,
-                eye_openness=eye_openness,
-                mouth_open=mouth_open,
-                head_pose=head_pose,
-            )
-            raw    = st.compute_attn(sig)
-            attn_s = st.smooth(raw)
-            prev   = st.prev_act
-            act    = st.classify_act(sig, attn_s,
-                                     laptop_detected=laptop_detected,
-                                     earphone_detected=earphone_detected)
-
-            # ── Behavior tracking ─────────────────────────────────────────────
-            if act != prev:
-                self._tracker(sid).record(act, time.time())
-
-            # ── Grid cell assignment ──────────────────────────────────────────
-            grid_cell_label = ""
-            if self.spatial_grid is not None:
-                pcx = (px1 + px2) / 2
-                pcy = (py1 + py2) / 2
-                cell = _nearest_cell(self.spatial_grid, pcx, pcy)
-                if cell:
-                    grid_cell_label = cell.label
-
-            tr = _trend(st.attn_hist)
-            x1, y1, x2, y2 = det["bbox"]
-
-            # ── Face match throttle ───────────────────────────────────────────
-            self.face_match_counters[sid] = self.face_match_counters.get(sid, 0) + 1
-            face_match_due = self.face_match_counters[sid] >= FACE_MATCH_INTERVAL
-            if face_match_due:
-                self.face_match_counters[sid] = 0
-
-            # ── Real face recognition ─────────────────────────────────────────
-            matched_student_id   = None
-            matched_student_name = None
-            match_confidence     = 0.0
-
-            if face_match_due and self.registered_faces and mp_res:
-                # Extract encoding from the face crop
-                cx1, cy1, cx2, cy2 = det["bbox"]
-                face_crop = frame[max(0,cy1):max(0,cy2), max(0,cx1):max(0,cx2)]
-                enc = face_rec_engine.extract_encoding(face_crop)
-                if enc is not None:
-                    reg_list = [(s_id, s_enc) for s_id, s_name, s_enc in self.registered_faces]
-                    matched_student_id, match_confidence = face_rec_engine.find_best_match(enc, reg_list)
-                    if matched_student_id is not None:
-                        for s_id, s_name, _ in self.registered_faces:
-                            if s_id == matched_student_id:
-                                matched_student_name = s_name
-                                break
-                        # Queue attendance event
-                        self.pending_attendance_events.append({
-                            "student_id":   matched_student_id,
-                            "student_name": matched_student_name,
-                            "seat_id":      sid,
-                            "confidence":   match_confidence,
-                            "timestamp":    time.time(),
-                        })
-
-            processed_faces.append({
-                "id":               sid,
-                "bbox":             [x1, y1, x2, y2],
-                "headPose":         head_pose,
-                "attentionScore":   attn_s,
-                "attentionRaw":     round(raw, 1),
-                "avgAttention30":   st.avg,
-                "attentionFactors": st.last_factors,
-                "attentionBreakdown": st.attention_breakdown(),
-                "emotion":          emotion,
-                "expressions":      blendshapes,
-                "activity":         act,
-                "reconciledActivity": st.reconciled_activity()[0],
-                "activityNote":     st.reconciled_activity()[1],
-                "cropUsed":         used_crop,
-                "trend":            tr,
-                "thumbnail":        crop_to_b64(frame, x1, y1, x2, y2),
-                "phoneDetected":    phone_detected,
-                "laptopDetected":   laptop_detected,
-                "earphoneDetected": earphone_detected,
-                "eyeOpenness":      eye_openness,
-                "mouthOpen":        mouth_open,
-                "gridCell":         grid_cell_label,
-                "faceMatchDue":     face_match_due,
-                "matchedStudentId": matched_student_id,
-                "studentName":      matched_student_name,
-                "matchConfidence":  match_confidence,
-            })
+        # ── Stage 4: Output & Universal Scene Representation ──────────────────
+        processed_faces, scene_state = self.output_stage.execute(
+            processed_faces=processed_faces,
+            topology=self.topology,
+            frame_idx=self.frame_count,
+        )
+        self.last_scene_state = scene_state
 
         return processed_faces
+
+    def export_benchmark_csv(self, filepath: str):
+        """Export accumulated association benchmark records to CSV."""
+        import csv
+        fieldnames = ["frame", "track_id", "head_x", "head_y", "bottom_y", "row", "seat", "cost", "status", "prev_seat", "geometric_match", "match_type"]
+        with open(filepath, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+            writer.writeheader()
+            for r in self.benchmark_records:
+                writer.writerow(r)
+        log.info(f"Exported {len(self.benchmark_records)} benchmark records to {filepath}")
+
+    # ── Person-based layout detection ────────────────────────────────────────
+
+    def build_person_grid(self, person_bboxes: list, W_px: int, H_px: int) -> "SpatialGrid":
+        """
+        Build a SpatialGrid from a list of person bounding boxes detected in
+        the first few frames — no furniture detection needed.
+
+        Algorithm:
+          1. Cluster persons into rows by Y-center with an adaptive gap.
+          2. Within each row sort left-to-right.
+          3. Adjacent persons whose X-centers are within BENCH_MERGE_FRAC of
+             each other share the same physical bench — label them L / R (/ M).
+          4. Return a SpatialGrid with R{row}B{bench}-{pos} labels so the
+             frontend can render the real classroom bench structure.
+
+        ponytail: O(n²) clustering — fine for ≤ 20 students.
+        """
+        from core.classroom_mapper import SpatialGrid, GridCell
+
+        if not person_bboxes:
+            return SpatialGrid(cells=[], rows=0, cols=0)
+
+        # Adaptive row-gap: fraction of frame height between row centers
+        ROW_GAP_FRAC    = 0.10   # 10 % of frame height
+        # Two persons within this fraction of frame width share a bench
+        BENCH_MERGE_FRAC = 0.12  # 12 % of frame width
+
+        # Deduplicate near-identical bboxes (same person seen multiple frames)
+        def _cx(b): return (b[0] + b[2]) / 2
+        def _cy(b): return (b[1] + b[3]) / 2
+
+        unique: list = []
+        for bb in person_bboxes:
+            if not any(abs(_cx(bb) - _cx(u)) < W_px * 0.08 and
+                       abs(_cy(bb) - _cy(u)) < H_px * 0.08
+                       for u in unique):
+                unique.append(bb)
+
+        # Sort by Y then X
+        unique.sort(key=lambda b: (_cy(b), _cx(b)))
+
+        # Cluster into rows
+        gap = ROW_GAP_FRAC * H_px
+        rows: list[list] = []
+        for bb in unique:
+            cy = _cy(bb)
+            if rows and abs(cy - _cy(rows[-1][-1])) <= gap:
+                rows[-1].append(bb)
+            else:
+                rows.append([bb])
+
+        # Sort each row left-to-right
+        for row in rows:
+            row.sort(key=_cx)
+
+        # Build GridCells — group side-by-side persons into benches
+        POSITIONS = {1: ["C"], 2: ["L", "R"], 3: ["L", "M", "R"]}
+        cells: list[GridCell] = []
+        bench_width = BENCH_MERGE_FRAC * W_px
+
+        for r_idx, row in enumerate(rows):
+            benches: list[list] = []
+            cur_bench: list = [row[0]]
+            for bb in row[1:]:
+                if _cx(bb) - _cx(cur_bench[-1]) <= bench_width:
+                    cur_bench.append(bb)
+                else:
+                    benches.append(cur_bench)
+                    cur_bench = [bb]
+            benches.append(cur_bench)
+
+            for b_idx, bench in enumerate(benches):
+                n = min(len(bench), 4)
+                positions = POSITIONS.get(n, [f"S{i+1}" for i in range(n)])
+                for p_idx, (bb, pos) in enumerate(zip(bench, positions)):
+                    x1, y1, x2, y2 = bb
+                    # Expand bbox slightly so it covers the full seat zone
+                    pad_x = int((x2 - x1) * 0.15)
+                    pad_y = int((y2 - y1) * 0.10)
+                    cells.append(GridCell(
+                        row=r_idx,
+                        col=b_idx * 4 + p_idx,
+                        label=f"R{r_idx+1}B{b_idx+1}-{pos}",
+                        bbox=[max(0, x1-pad_x), max(0, y1-pad_y),
+                              min(W_px, x2+pad_x), min(H_px, y2+pad_y)],
+                    ))
+
+        n_rows = len(rows)
+        n_cols = max((len(r) for r in rows), default=0)
+        grid   = SpatialGrid(cells=cells, rows=n_rows, cols=n_cols)
+        self.spatial_grid = grid
+        # Also update stabilizer cap to match detected count
+        detected = len(cells)
+        if detected > self.stabilizer.max_seats:
+            from core.stabilizer import SeatStabilizer
+            old = self.stabilizer
+            self.stabilizer = SeatStabilizer(max_seats=min(detected + 2, 20))
+            # Copy already-discovered seats so IDs stay stable
+            self.stabilizer.seats        = old.seats
+            self.stabilizer.next_seat_id = old.next_seat_id
+            self.stabilizer.seats_sorted = old.seats_sorted
+            self.stabilizer._locked      = old._locked
+        return grid
 
     def process_video_file(self, video_path: str, frame_skip: int = 3):
         """
@@ -493,6 +661,17 @@ class ClassroomEngine:
         t0         = time.time()
         t_frame    = t0
 
+        from core.behavior_tracker import BehaviorTracker
+        behavior_trackers = {sid: BehaviorTracker(session_start_time=t0) for sid in range(1, 25)}
+        student_crops = {}
+        best_crop_confs = {}
+
+        # ── Phase 1: layout scan (first LAYOUT_SCAN_FRAMES processed frames) ──
+        # Collect all person bboxes, then build a SpatialGrid from real positions.
+        LAYOUT_SCAN_FRAMES = 5
+        layout_bboxes: list = []
+        layout_done = False
+
         while True:
             ret, frame = cap.read()
             if not ret:
@@ -503,12 +682,71 @@ class ClassroomEngine:
 
             t_now = time.time()
             fps_window.append(1.0 / max(1e-6, t_now - t_frame))
-            t_frame    = t_now
-            fps_live   = sum(fps_window) / len(fps_window)
+            t_frame  = t_now
             processed += 1
+
+            # During layout scan: run YOLO only (no MediaPipe) for speed
+            if not layout_done:
+                from core.detector import detect_faces_and_phones
+                raw_dets, _, _, _ = detect_faces_and_phones(
+                    frame, min_conf=YOLO_CONF, persist=False
+                )
+                for d in raw_dets:
+                    layout_bboxes.append(d["bbox"])
+
+                if processed >= LAYOUT_SCAN_FRAMES:
+                    # Build spatial grid from collected person positions
+                    grid = self.build_person_grid(layout_bboxes, W_px, H_px)
+                    layout_done = True
+
+                    # Describe the layout for the frontend
+                    seat_list = [
+                        {"label": c.label, "row": c.row + 1,
+                         "bbox": c.bbox, "bench": int(c.label.split("B")[1].split("-")[0])
+                         if "B" in c.label else c.col + 1}
+                        for c in grid.cells
+                    ]
+                    row_counts = {}
+                    for c in grid.cells:
+                        row_counts[c.row + 1] = row_counts.get(c.row + 1, 0) + 1
+
+                    yield {
+                        "type":       "layout",
+                        "rows":       grid.rows,
+                        "cols":       grid.cols,
+                        "totalSeats": len(grid.cells),
+                        "seats":      seat_list,
+                        "rowCounts":  row_counts,
+                        "frameWidth": W_px,
+                        "frameHeight": H_px,
+                    }
+
+                # Still in scan phase — skip normal frame processing
+                fps_live = sum(fps_window) / len(fps_window)
+                detections += 0  # scan frames don't count
+                continue
+
+            fps_live = sum(fps_window) / len(fps_window)
 
             faces = self.process_single_frame(frame, W_px, H_px, persist=True)
             detections += len(faces)
+
+            now_ts = time.time()
+            for f in faces:
+                sid = f.get("id")
+                slabel = f.get("seat_label") or f"S{sid}"
+                if sid in behavior_trackers:
+                    behavior_trackers[sid].record(f.get("activity", "neutral"), now_ts)
+                if f.get("status") == "OK" and "bbox" in f:
+                    pbox = f.get("person_bbox", f["bbox"])
+                    x1, y1, x2, y2 = [int(v) for v in pbox]
+                    x1, y1 = max(0, x1), max(0, y1)
+                    x2, y2 = min(W_px, x2), min(H_px, y2)
+                    conf = float(f.get("confidence", 0.8))
+                    if (x2 - x1) > 60 and (y2 - y1) > 80:
+                        if slabel not in best_crop_confs or conf > best_crop_confs[slabel]:
+                            student_crops[slabel] = frame[y1:y2, x1:x2].copy()
+                            best_crop_confs[slabel] = conf
 
             if processed % DASH_EVERY == 0:
                 self._print_dashboard(frame_idx, frame_idx / fps_src, fps_live, faces, total, processed)
@@ -525,6 +763,25 @@ class ClassroomEngine:
         elapsed = time.time() - t0
         self._print_report(processed, detections, elapsed)
 
+        # Automatically export comprehensive structure and student reports
+        out_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "outputs", "structure_experiment"))
+        try:
+            from core.pipeline.comprehensive_analyzer import ComprehensiveExporter
+            exporter = ComprehensiveExporter(out_dir=out_dir)
+            session_meta = {
+                "session_id": self.session_id,
+                "video_path": video_path,
+                "width": W_px,
+                "height": H_px,
+                "fps": fps_src,
+                "duration": round(frame_idx / fps_src, 2),
+                "frame_skip": frame_skip,
+                "processed_frames": processed,
+            }
+            exporter.export_all(self, behavior_trackers, student_crops, session_meta)
+        except Exception as e:
+            log.warning(f"Comprehensive export error: {e}")
+
         yield {
             "type":               "complete",
             "framesProcessed":     processed,
@@ -534,6 +791,7 @@ class ClassroomEngine:
             "totalFaceDetections": detections,
             "elapsedSeconds":      round(elapsed, 2),
             "sessionId":           self.session_id,
+            "exportDirectory":     out_dir,
             "ollamaAvailable":     ollama_labeler.is_available(),
             "aiAnalysisNote": (
                 "AI analysis powered by " + (ollama_labeler.get_model() or "N/A")

@@ -16,6 +16,9 @@ export const api = {
     return fetch(`${API}/students/${studentId}/assign-seat`, { method: "POST", body: fd }).then(r => r.json());
   },
 
+  getStudentProfile: (studentId) =>
+    fetch(`${API}/students/${studentId}/profile`).then(r => r.json()),
+
   // ── Face ──────────────────────────────────────────────────
   registerFace: (studentId, imageBlob) => {
     const fd = new FormData();
@@ -23,21 +26,69 @@ export const api = {
     return fetch(`${API}/register-face/${studentId}`, { method: "POST", body: fd }).then(r => r.json());
   },
 
+  // Multi-shot enrollment: caller passes a pre-built FormData with 'images' files
+  enrollFace: (studentId, formData) =>
+    fetch(`${API}/enroll-face/${studentId}`, { method: "POST", body: formData }).then(r => {
+      if (!r.ok) return r.json().then(e => Promise.reject(new Error(e.detail || r.statusText)));
+      return r.json();
+    }),
+
   processFrame: (imageBlob) => {
     const fd = new FormData();
     fd.append("image", imageBlob, "frame.jpg");
     return fetch(`${API}/process-frame`, { method: "POST", body: fd }).then(r => r.json());
   },
 
+  // ── Seating config ────────────────────────────────────────
+  getSeatingConfig: () => fetch(`${API}/seating-config`).then(r => r.json()),
+
+  saveSeatingConfig: (params) => {
+    const fd = new FormData();
+    Object.entries(params).forEach(([k, v]) => fd.append(k, v));
+    return fetch(`${API}/seating-config`, { method: "POST", body: fd }).then(r => r.json());
+  },
+
   // ── Attendance ────────────────────────────────────────────
   getAttendance: (date) =>
     fetch(`${API}/attendance${date ? `?target_date=${date}` : ""}`).then(r => r.json()),
+
+  processObservations: (observations, dryRun = null) => {
+    const fd = new FormData();
+    fd.append("observations", typeof observations === 'string' ? observations : JSON.stringify(observations));
+    if (dryRun !== null) fd.append("dry_run", dryRun);
+    return fetch(`${API}/attendance/process-observation`, { method: "POST", body: fd }).then(r => r.json());
+  },
+
+  reviewAttendance: (recordId, decision, assignedStudentId = null) => {
+    const fd = new FormData();
+    fd.append("record_id", recordId);
+    fd.append("decision", decision);
+    if (assignedStudentId) fd.append("assigned_student_id", assignedStudentId);
+    return fetch(`${API}/attendance/review`, { method: "POST", body: fd }).then(r => r.json());
+  },
 
   markManual: (studentId, status) => {
     const fd = new FormData();
     fd.append("student_id", studentId);
     fd.append("status", status);
     return fetch(`${API}/attendance/manual`, { method: "POST", body: fd }).then(r => r.json());
+  },
+
+  resetAttendance: (targetDate = null, dryRunOnly = false) => {
+    const fd = new FormData();
+    if (targetDate) fd.append("target_date", targetDate);
+    fd.append("dry_run_only", dryRunOnly);
+    return fetch(`${API}/attendance/reset`, { method: "POST", body: fd }).then(r => r.json());
+  },
+
+  exportAttendanceUrl: (date = null) =>
+    `${API}/attendance/export-csv${date ? `?target_date=${date}` : ""}`,
+
+  syncLiveFeed: (framesBurst = 5, dryRun = false) => {
+    const fd = new FormData();
+    fd.append("frames_burst", framesBurst);
+    fd.append("dry_run", dryRun);
+    return fetch(`${API}/attendance/sync-live-feed`, { method: "POST", body: fd }).then(r => r.json());
   },
 
   // ── Analytics ─────────────────────────────────────────────
@@ -90,8 +141,19 @@ export const api = {
   ollamaAnalyzeStudent: (seatId) =>
     fetch(`${API}/ollama/analyze-student/${seatId}`, { method: "POST" }).then(r => r.json()),
 
+  // ── Structure AI Pipeline ──────────────────────────────────
+  getStructureAILatest: () => fetch(`${API}/structure-ai/latest`).then(r => r.json()),
+  runStructureAIPipeline: (videoPath = "", maxFrames = 60) => {
+    const fd = new FormData();
+    if (videoPath) fd.append("video_path", videoPath);
+    fd.append("max_frames", maxFrames);
+    return fetch(`${API}/structure-ai/run`, { method: "POST", body: fd }).then(r => r.json());
+  },
+
   // ── Camera ────────────────────────────────────────────────
   streamUrl: `${API}/camera/stream`,
+  liveClassroomStreamUrl: `${API}/live-classroom/stream`,
+  getLiveClassroomTelemetry: () => fetch(`${API}/live-classroom/telemetry`).then(r => r.json()),
   startCamera: () => fetch(`${API}/camera/start`, { method: "POST" }).then(r => r.json()),
   stopCamera:  () => fetch(`${API}/camera/stop`,  { method: "POST" }).then(r => r.json()),
   getDetections: () => fetch(`${API}/camera/detections`).then(r => r.json()),

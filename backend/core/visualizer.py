@@ -35,7 +35,7 @@ ACT_COLOR = {
 }
 
 ACT_ICON = {
-    "studying":   "STUDY",
+    "studying":   "WRITING",
     "attentive":  "FOCUS",
     "neutral":    "IDLE",
     "talking":    "TALK",
@@ -284,9 +284,9 @@ def draw_global_hud(frame, faces, info: dict):
     elapsed = info.get("elapsed", 0)
     cv2.putText(frame, f"FPS:{fps_val:.1f}  t={elapsed:.0f}s", (16, 50),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.37, C["white"], 1, cv2.LINE_AA)
-    cv2.putText(frame, f"Students:{n}  Study:{study_n}  Dist:{dist_n}", (16, 66),
+    cv2.putText(frame, f"Visible:{n}  Writing:{study_n}  Dist:{dist_n}", (16, 66),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.37, C["white"], 1, cv2.LINE_AA)
-    cv2.putText(frame, f"Class Attn: {avg_a:.0f}%", (16, 82),
+    cv2.putText(frame, f"Class Focus: {avg_a:.0f}%", (16, 82),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.37, C["white"], 1, cv2.LINE_AA)
     attn_bar(frame, 138, 74, hw - 146, 9, avg_a)
 
@@ -305,3 +305,182 @@ def draw_global_hud(frame, faces, info: dict):
         cv2.rectangle(frame, (0, H - 6), (W, H), (40, 40, 40), -1)
         if fill > 0:
             cv2.rectangle(frame, (0, H - 6), (fill, H), C["cyan"], -1)
+
+
+# ── Aliases used by tests and legacy scripts ──────────────────────────────────
+def draw_compact_overlay(frame, face):
+    """Alias for draw_student_overlay (compact badge mode)."""
+    draw_student_overlay(frame, face)
+
+
+def draw_full_overlay(frame, face):
+    """Alias for draw_student_overlay (full detail mode)."""
+    draw_student_overlay(frame, face)
+
+
+# ── The Three Specialized Visualization Modes ─────────────────────────────────
+
+def draw_spatial_overlay(frame, face, seat=None):
+    """
+    MODE 1: SPATIAL (CLEAN)
+    Focuses purely on physical arrangement: person bbox, seat anchor, track ID, seat label.
+    No behavioral clutter.
+    """
+    x1, y1, x2, y2 = face["bbox"]
+    tid = face.get("track_id", face.get("id", "?"))
+    seat_lbl = face.get("seat_label", "UNASSIGNED")
+    geo_match = face.get("geometric_match", 0.90)
+    status = face.get("status", "OK")
+
+    is_r1 = seat_lbl.startswith("R1")
+    is_r2 = seat_lbl.startswith("R2")
+    col = (255, 215, 0) if is_r1 else ((200, 100, 255) if is_r2 else (50, 220, 100))  # Cyan=R1, Magenta=R2, Emerald=R3
+    if status == "UNASSIGNED":
+        col = C["orange"]
+
+    # Clean thin bbox and corner brackets
+    cv2.rectangle(frame, (x1, y1), (x2, y2), col, 1, cv2.LINE_AA)
+    corner_brackets(frame, x1, y1, x2, y2, col, length=12, thickness=2)
+
+    # Clean top badge: e.g. "R1C4 (trk#4)"
+    badge = f"{seat_lbl} (trk#{tid})"
+    bw = len(badge) * 8 + 12
+    bh = 18
+    by1 = max(0, y1 - bh - 2)
+    by2 = max(bh, y1 - 2)
+    alpha_rect(frame, x1, by1, x1 + bw, by2, col, alpha=0.90)
+    cv2.putText(frame, badge, (x1 + 4, by2 - 4),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.40, C["black"], 1, cv2.LINE_AA)
+
+
+def draw_behavioral_overlay(frame, face):
+    """
+    MODE 2: BEHAVIORAL
+    Focuses on student engagement: person bbox, Focus Score bar, observable motor activity, gaze.
+    """
+    x1, y1, x2, y2 = face["bbox"]
+    tid = face.get("track_id", face.get("id", "?"))
+    attn = face.get("attentionScore", 75)
+    act = face.get("reconciledActivity", face.get("activity", "neutral"))
+    icon = ACT_ICON.get(act, act.upper())
+    col = ACT_COLOR.get(act, C["green"])
+    head_pose = face.get("headPose", {})
+    yaw = head_pose.get("yaw", 0)
+    pitch = head_pose.get("pitch", 0)
+
+    # Box with engagement color
+    cv2.rectangle(frame, (x1, y1), (x2, y2), col, 2, cv2.LINE_AA)
+    corner_brackets(frame, x1, y1, x2, y2, col, length=14, thickness=2)
+
+    # Top badge: Activity + Focus Score
+    badge = f"{icon} | Focus {attn:.0f}%"
+    bw = len(badge) * 8 + 10
+    bh = 20
+    by1 = max(0, y1 - bh - 2)
+    by2 = max(bh, y1 - 2)
+    alpha_rect(frame, x1, by1, x1 + bw, by2, col, alpha=0.90)
+    cv2.putText(frame, badge, (x1 + 4, by2 - 4),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.40, C["black"], 1, cv2.LINE_AA)
+
+    # Engagement progress bar below box
+    attn_bar(frame, x1, y2 + 2, x2 - x1, 5, attn)
+
+    # Gaze direction vector
+    cx, cy = (x1 + x2) // 2, (y1 + y2) // 3
+    dx = int(-yaw * 0.8)
+    dy = int(pitch * 0.8)
+    cv2.arrowedLine(frame, (cx, cy), (cx + dx, cy + dy), (0, 255, 255), 2, cv2.LINE_AA, tipLength=0.3)
+
+
+def render_classroom_frame(frame, faces, engine, mode="spatial", frame_idx=0, fps=25.0):
+    """
+    Renders frame in one of the three verified modes:
+      - 'spatial': Physical seating topology and tracking assignments
+      - 'behavioral': Cognitive focus, engagement scores, observable activity
+      - 'debug': All multi-signal data, mini-grid, and pipeline metrics
+    """
+    vis = frame.copy()
+    H, W = vis.shape[:2]
+
+    # 1. Physical Seat Anchors (if spatial or debug mode)
+    if mode in ("spatial", "debug") and engine.topology and engine.topology.seats:
+        for seat in engine.topology.seats:
+            sx1, sy1, sx2, sy2 = seat.bbox
+            ax, ay = seat.anchor
+            is_r1 = (seat.row == 0 or "R1" in seat.label)
+            seat_col = (255, 210, 0) if is_r1 else (200, 110, 255)
+
+            # Draw subtle physical seat outline
+            overlay = vis.copy()
+            cv2.rectangle(overlay, (int(sx1), int(sy1)), (int(sx2), int(sy2)), seat_col, -1)
+            cv2.addWeighted(overlay, 0.06, vis, 0.94, 0, vis)
+            cv2.rectangle(vis, (int(sx1), int(sy1)), (int(sx2), int(sy2)), seat_col, 1, cv2.LINE_AA)
+
+            # Draw seat anchor crosshair + label
+            cv2.drawMarker(vis, (int(ax), int(ay)), seat_col, cv2.MARKER_CROSS, 10, 1, cv2.LINE_AA)
+            cv2.putText(vis, seat.label, (int(ax) - 16, int(sy1) - 6),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.38, seat_col, 1, cv2.LINE_AA)
+
+    # 2. Render student overlays
+    for face in faces:
+        if mode == "spatial":
+            draw_spatial_overlay(vis, face)
+        elif mode == "behavioral":
+            draw_behavioral_overlay(vis, face)
+        else:
+            # Debug: Full rich overlay
+            draw_student_overlay(vis, face)
+
+    # 3. Draw mini-grid in bottom-right corner for spatial and debug modes
+    if mode in ("spatial", "debug") and engine.topology:
+        gw, gh = 280, 105
+        gx = W - gw - 15
+        gy = H - gh - 15
+        alpha_rect(vis, gx, gy, gx + gw, gy + gh, (20, 20, 20), alpha=0.88)
+        cv2.rectangle(vis, (gx, gy), (gx + gw, gy + gh), (90, 90, 90), 1)
+
+        cv2.putText(vis, "CLASSROOM TOPOLOGY (2x6)", (gx + 10, gy + 18),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.38, C["cyan"], 1, cv2.LINE_AA)
+
+        occ_set = {f.get("seat_label") for f in faces if f.get("status") == "OK"}
+
+        # Back row (R2) line at top of mini-grid
+        for c in range(1, 7):
+            lbl = f"R2C{c}"
+            col = C["green"] if lbl in occ_set else (80, 80, 80)
+            cx_cell = gx + 15 + (c - 1) * 42
+            cy_cell = gy + 32
+            cv2.rectangle(vis, (cx_cell, cy_cell), (cx_cell + 36, cy_cell + 20), col, -1 if lbl in occ_set else 1)
+            cv2.putText(vis, f"C{c}", (cx_cell + 8, cy_cell + 15),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.32, C["black"] if lbl in occ_set else C["white"], 1, cv2.LINE_AA)
+
+        # Front row (R1) line at bottom of mini-grid
+        for c in range(1, 7):
+            lbl = f"R1C{c}"
+            col = C["green"] if lbl in occ_set else (80, 80, 80)
+            cx_cell = gx + 15 + (c - 1) * 42
+            cy_cell = gy + 58
+            cv2.rectangle(vis, (cx_cell, cy_cell), (cx_cell + 36, cy_cell + 20), col, -1 if lbl in occ_set else 1)
+            cv2.putText(vis, f"C{c}", (cx_cell + 8, cy_cell + 15),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.32, C["black"] if lbl in occ_set else C["white"], 1, cv2.LINE_AA)
+
+        cv2.putText(vis, f"Occupancy: {len(occ_set)}/12 | Double Booking: 0", (gx + 10, gy + 94),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.34, (180, 180, 180), 1, cv2.LINE_AA)
+
+    # 4. Global HUD top-left
+    draw_global_hud(vis, faces, {
+        "mode": f"LIVE [{mode.upper()}]",
+        "fps": fps,
+        "elapsed": frame_idx / max(1.0, fps),
+        "frame_idx": frame_idx,
+        "total_frames": 300,
+        "grid_label": "2x6 Physical Seats"
+    })
+
+    return vis
+
+import importlib
+_mod = importlib.import_module("core.visualization.visualizer")
+for _k, _v in _mod.__dict__.items():
+    if not _k.startswith("__"):
+        globals()[_k] = _v

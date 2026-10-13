@@ -99,7 +99,8 @@ except Exception as e:
     fail("import visualizer primitives", str(e))
 
 try:
-    from test_real_classroom import suppress_overlapping_faces, draw_compact_overlay, draw_full_overlay, _iou
+    from core.detector  import suppress_overlapping_faces, _iou
+    from core.visualizer import draw_compact_overlay, draw_full_overlay
     ok("import test_real_classroom helpers")
 except Exception as e:
     fail("import test_real_classroom helpers", str(e))
@@ -735,7 +736,7 @@ else:
         import core.config as _cfg
         _cfg.YOLO_CONF = 0.30
         from core.engine import ClassroomEngine
-        from test_real_classroom import suppress_overlapping_faces
+        from core.detector import suppress_overlapping_faces
 
         cap = cv2.VideoCapture(VIDEO_PATH)
         assert cap.isOpened(), "could not open video"
