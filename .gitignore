@@ -38,6 +38,7 @@ classrom video of wit/videos/
 # ── Generated outputs ─────────────────────────────────────────────────────────
 outputs/
 real_classroom_results.txt
+/benchmark_association_log.csv
 scratch/video_runs/*.jpg
 
 # ── Database ──────────────────────────────────────────────────────────────────
